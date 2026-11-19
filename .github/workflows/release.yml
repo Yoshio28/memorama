@@ -1,9 +1,12 @@
 name: Publicar release
 
-# Al subir una etiqueta vX.Y.Z se compila el instalador de Windows y se publica la release.
+# Cuando llega a main una versión nueva (campo "version" de package.json) que aún no tiene
+# release, se compila el instalador de Windows y se publica la release vX.Y.Z con su etiqueta.
+# También se puede lanzar a mano desde la pestaña Actions (vuelve a subir los archivos).
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -13,23 +16,41 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: ¿Hay versión nueva?
+        id: ver
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="v$(node -p "require('./package.json').version")"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          if gh release view "$TAG" >/dev/null 2>&1 && [ "${{ github.event_name }}" != "workflow_dispatch" ]; then
+            echo "La release $TAG ya existe; no hay nada que publicar."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          fi
       - uses: actions/setup-node@v4
+        if: steps.ver.outputs.skip != 'true'
         with:
           node-version: 22
           cache: npm
       - name: Instalar NSIS
+        if: steps.ver.outputs.skip != 'true'
         run: sudo apt-get update -qq && sudo apt-get install -y -qq nsis zip
       - run: npm ci
+        if: steps.ver.outputs.skip != 'true'
       - run: npm test
+        if: steps.ver.outputs.skip != 'true'
       - name: Compilar instalador y versión portable
+        if: steps.ver.outputs.skip != 'true'
         run: npm run dist:win
       - name: Publicar release
+        if: steps.ver.outputs.skip != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.ver.outputs.tag }}
         run: |
-          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
-            gh release upload "$GITHUB_REF_NAME" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip --clobber
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip --clobber
           else
-            gh release create "$GITHUB_REF_NAME" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip \
-              --title "Memora ${GITHUB_REF_NAME#v}" --notes-file .github/release-notes.md
+            gh release create "$TAG" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip \
+              --target "$GITHUB_SHA" --title "Memora ${TAG#v}" --notes-file .github/release-notes.md
           fi
