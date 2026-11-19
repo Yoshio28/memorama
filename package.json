@@ -1,0 +1,36 @@
+{
+  "name": "memora",
+  "version": "1.0.0",
+  "description": "Tarjetas de estudio con repetición espaciada, secciones y modos de estudio personalizables",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.test.js",
+    "dist": "electron-builder"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.1"
+  },
+  "build": {
+    "appId": "app.memora.flashcards",
+    "productName": "Memora",
+    "files": [
+      "main.js",
+      "preload.js",
+      "src/**/*"
+    ],
+    "win": {
+      "target": "nsis"
+    },
+    "mac": {
+      "target": "dmg",
+      "category": "public.app-category.education"
+    },
+    "linux": {
+      "target": "AppImage",
+      "category": "Education"
+    }
+  }
+}
