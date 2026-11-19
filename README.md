@@ -67,15 +67,24 @@ Pruebas del algoritmo:
 npm test
 ```
 
-### Crear el instalador
+### Crear el instalador de Windows
 
 ```bash
-npx electron-builder --win    # Windows (.exe)
-npx electron-builder --mac    # macOS (.dmg), debe ejecutarse en un Mac
-npx electron-builder --linux  # Linux (AppImage)
+npm run dist:win
 ```
 
-El resultado queda en `dist/`.
+Genera en `dist/`:
+
+- `Memora-Setup-<versión>.exe`: instalador. Instala para el usuario actual (sin
+  permisos de administrador) y crea accesos directos en el menú Inicio y el
+  escritorio, además de un desinstalador.
+- `Memora-Portable-<versión>.zip`: descomprímelo y abre `Memora.exe`. No requiere instalación.
+
+El proceso funciona en Windows, Linux o macOS. Necesita `makensis` (NSIS) y `zip`
+en el PATH, pero no Wine: el icono y la versión se incrustan con `resedit`
+(`scripts/win-resources.mjs`) y el instalador se define en `build/installer.nsi`.
+
+Para macOS y Linux: `npx electron-builder --mac` (en un Mac) o `npx electron-builder --linux`.
 
 ## Dónde se guardan los datos
 

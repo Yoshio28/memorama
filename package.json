@@ -6,12 +6,15 @@
   "scripts": {
     "start": "electron .",
     "test": "node --test test/*.test.js",
-    "dist": "electron-builder"
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win dir && node scripts/win-resources.mjs && makensis -V2 -DVERSION=$npm_package_version build/installer.nsi && node scripts/win-zip.mjs"
   },
-  "author": "",
+  "author": "Memora",
   "license": "MIT",
   "devDependencies": {
-    "electron": "^33.2.1"
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "resedit": "^2.0.3"
   },
   "build": {
     "appId": "app.memora.flashcards",
@@ -22,15 +25,30 @@
       "src/**/*"
     ],
     "win": {
-      "target": "nsis"
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico",
+      "signAndEditExecutable": false
     },
     "mac": {
       "target": "dmg",
-      "category": "public.app-category.education"
+      "category": "public.app-category.education",
+      "icon": "build/icon.png"
     },
     "linux": {
       "target": "AppImage",
-      "category": "Education"
+      "category": "Education",
+      "icon": "build/icon.png"
+    },
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
     }
   }
 }
