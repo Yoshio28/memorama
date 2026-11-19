@@ -47,6 +47,13 @@ Además añade dos cosas:
 - Guardado automático y copia de seguridad diaria (se conservan 14).
 - Tema claro, oscuro o el del sistema.
 
+## Descargar
+
+**Windows:** descarga `Memora-Setup-1.0.0.exe` desde
+[Releases](https://github.com/Yoshio28/memorama/releases/latest) y ábrelo. El
+programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
+**Más información → Ejecutar de todas formas**. También hay una versión portable en `.zip`.
+
 ## 100 % local
 
 Memora no necesita internet ni cuentas: todo se guarda en tu equipo. La app
