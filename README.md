@@ -32,11 +32,25 @@ Además añade dos cosas:
   reiniciar progreso, eliminar).
 - Estadísticas: previsión de repasos, actividad de 30 días, estado de las tarjetas
   y **rendimiento por sección** (de peor a mejor), para saber qué tema reforzar.
-- Importar CSV/TSV/TXT (anverso, reverso y sección opcional). Sirve el formato
-  «Notas en texto plano» que exportan otras apps de flashcards.
-  Exportar un mazo a CSV y copias completas en JSON.
+- Importar archivos de texto (`.txt`, `.csv`, `.tsv`): una tarjeta por línea.
+  En los `.txt` el separador por defecto es `=`:
+
+  ```
+  perro = dog
+  gato = cat = Animales      ← la 3.ª columna (opcional) es la sección
+  ```
+
+  Puedes cambiar el separador (tabulador, `;`, `,`, `|`, `:` o uno propio) y ver
+  la vista previa al momento. Las líneas sin separador se omiten y se avisa
+  cuántas son. También sirve el formato «Notas en texto plano» que exportan otras
+  apps de flashcards. Se puede exportar un mazo a CSV y hacer copias completas en JSON.
 - Guardado automático y copia de seguridad diaria (se conservan 14).
 - Tema claro, oscuro o el del sistema.
+
+## 100 % local
+
+Memora no necesita internet ni cuentas: todo se guarda en tu equipo. La app
+bloquea cualquier conexión de red; solo carga sus propios archivos.
 
 ## Uso
 

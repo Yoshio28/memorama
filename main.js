@@ -1,6 +1,6 @@
 'use strict';
 
-const { app, BrowserWindow, ipcMain, dialog, shell, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
 
@@ -99,14 +99,17 @@ function createWindow() {
   });
   win.once('ready-to-show', () => win.show());
   win.webContents.on('will-navigate', (ev) => ev.preventDefault());
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) shell.openExternal(url);
-    return { action: 'deny' };
-  });
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
 }
 
 app.whenReady().then(() => {
+  // Aplicación 100 % local: se bloquea cualquier petición que no sea a archivos de la propia app.
+  session.defaultSession.webRequest.onBeforeRequest((details, callback) => {
+    const local = /^(file|devtools|data|blob|chrome-extension):/i.test(details.url);
+    if (!local) console.warn('Petición de red bloqueada:', details.url);
+    callback({ cancel: !local });
+  });
   const isMac = process.platform === 'darwin';
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([

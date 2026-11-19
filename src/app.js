@@ -526,7 +526,7 @@ function renderAdd() {
         <div class="field"><label for="add-back">Reverso (respuesta)</label><textarea class="input" id="add-back" placeholder="París"></textarea></div>
         <label class="check"><input type="checkbox" id="add-reverse"> Crear también la tarjeta inversa (respuesta → pregunta)</label>
         <div class="row" style="margin-top:16px"><span class="hint">Formato: **negrita**, *cursiva*, \`código\`</span><span class="spacer"></span>
-          <button type="button" class="btn" data-act="import-csv">Importar CSV/TXT…</button><button class="btn primary" type="submit">Añadir tarjeta</button></div>
+          <button type="button" class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn primary" type="submit">Añadir tarjeta</button></div>
       </form>
       <div class="panel pad"><h3>Últimas en «${esc(d.name)}»</h3>
         <ul class="recent">${recent.map((c) => `<li><div>${esc(plain(c.front))}</div><div class="muted">${esc(plain(c.back))}</div></li>`).join('') || '<li class="muted">Todavía no hay tarjetas.</li>'}</ul></div>
@@ -770,7 +770,7 @@ function renderSettings() {
       </div></div>
     <div class="panel pad"><h2 style="margin-bottom:4px">Datos</h2><p class="hint" style="margin:0 0 14px">Tus datos se guardan en este equipo. Cada día se crea una copia de seguridad automática (se conservan 14).</p>
       <div class="row"><button class="btn" data-act="export-json">Exportar copia (JSON)</button><button class="btn" data-act="import-json">Restaurar copia…</button>
-        <button class="btn" data-act="import-csv">Importar CSV/TXT…</button><button class="btn" data-act="export-csv">Exportar mazo a CSV…</button>
+        <button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn" data-act="export-csv">Exportar mazo a CSV…</button>
         <button class="btn ghost" data-act="open-folder">Abrir carpeta de datos</button></div></div>
   </div>`;
   $$('#theme input').forEach((el) => { el.onchange = () => { set.theme = el.value; applyTheme(); persist(); }; });
@@ -1284,26 +1284,36 @@ function customStudyModal(initial, preset) {
 }
 
 // ---------------------------------------------------------------- Importar / exportar
-function parseDelimited(text) {
-  const lines = text.replace(/^﻿/, '').split(/\r?\n/);
-  let sep = null;
-  let html = false;
-  const body = [];
-  for (const line of lines) {
+const SEPARATORS = { '=': '= (igual)', '\t': 'Tabulador', ';': '; (punto y coma)', ',': ', (coma)', '|': '| (barra vertical)', ':': ': (dos puntos)' };
+
+/** Lee las cabeceras tipo «#separator:tab» que añaden otras apps al exportar en texto plano. */
+function readHeaders(text) {
+  const h = { sep: null, html: false };
+  for (const line of text.replace(/^﻿/, '').split(/\r?\n/)) {
     const m = line.match(/^#(\w+):(.*)$/);
-    if (m) {
-      const v = m[2].trim().toLowerCase();
-      if (m[1] === 'separator') sep = { tab: '\t', semicolon: ';', comma: ',', pipe: '|', space: ' ' }[v] || v;
-      if (m[1] === 'html') html = v === 'true';
-      continue;
-    }
-    body.push(line);
+    if (!m) continue;
+    const v = m[2].trim().toLowerCase();
+    if (m[1] === 'separator') h.sep = { tab: '\t', semicolon: ';', comma: ',', pipe: '|', space: ' ', colon: ':' }[v] || v;
+    if (m[1] === 'html') h.html = v === 'true';
   }
-  const textBody = body.join('\n');
+  return h;
+}
+
+/**
+ * Convierte texto delimitado en filas de campos. `sep` fuerza el separador; si no se indica,
+ * se usa la cabecera del archivo o se detecta (tabulador, «=», «;» o «,»).
+ */
+function parseDelimited(text, sep) {
+  const headers = readHeaders(text);
+  const body = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => !/^#\w+:/.test(l));
+  if (!sep) sep = headers.sep;
   if (!sep) {
     const first = body.find((l) => l.trim()) || '';
-    sep = first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
+    sep = first.includes('\t') ? '\t' : first.includes('=') ? '=' : first.includes(';') ? ';' : ',';
   }
+  const textBody = body.join('\n');
+  // Las comillas solo agrupan campos en formatos tipo CSV; en «a = b» se conservan tal cual.
+  const quotes = [',', ';', '\t', '|'].includes(sep);
   const rows = [];
   let row = [], field = '', q = false;
   for (let i = 0; i < textBody.length; i++) {
@@ -1311,39 +1321,72 @@ function parseDelimited(text) {
     if (q) {
       if (ch === '"') { if (textBody[i + 1] === '"') { field += '"'; i++; } else q = false; }
       else field += ch;
-    } else if (ch === '"' && field === '') q = true;
-    else if (ch === sep) { row.push(field); field = ''; }
+    } else if (quotes && ch === '"' && field.trim() === '') { q = true; field = ''; }
+    else if (textBody.startsWith(sep, i)) { row.push(field); field = ''; i += sep.length - 1; }
     else if (ch === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
     else field += ch;
   }
   row.push(field);
   rows.push(row);
   const clean = (s) => {
-    if (!html && !/<[a-z][\s\S]*>/i.test(s)) return s.trim();
+    if (!headers.html && !/<[a-z][\s\S]*>/i.test(s)) return s.trim();
     const doc = new DOMParser().parseFromString(s.replace(/<br\s*\/?>/gi, '\n').replace(/<\/(div|p)>/gi, '\n'), 'text/html');
     return (doc.body.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
   };
   return rows.filter((r) => r.some((f) => f.trim())).map((r) => r.map(clean));
 }
 
+/** Separador inicial: el de la cabecera del archivo; en .txt, «=»; en el resto, detección automática. */
+function defaultSeparator(name, text) {
+  const h = readHeaders(text).sep;
+  if (h) return h;
+  if (/\.txt$/i.test(name)) return '=';
+  if (/\.tsv$/i.test(name)) return '\t';
+  const first = text.split(/\r?\n/).find((l) => l.trim() && !l.startsWith('#')) || '';
+  return first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
+}
+
 async function importCsv() {
-  const file = await api.openFile({ filters: [{ name: 'Texto delimitado', extensions: ['csv', 'tsv', 'txt'] }] });
+  const file = await api.openFile({ filters: [{ name: 'Archivos de texto', extensions: ['txt', 'csv', 'tsv'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
   if (!file) return;
-  const rows = parseDelimited(file.content);
-  if (!rows.length || rows[0].length < 2) return toast('No se encontraron filas con al menos dos columnas');
+  let sep = defaultSeparator(file.name, file.content);
+  let rows = [];
+  const known = Object.prototype.hasOwnProperty.call(SEPARATORS, sep);
   const m = openModal(`${modalHead('Importar tarjetas')}<form><div class="modal-body">
-    <p class="hint" style="margin-top:0">${esc(file.name)} · ${plural(rows.length, 'fila', 'filas')}. Columnas: <b>1</b> anverso, <b>2</b> reverso, <b>3</b> sección (opcional; se crea si no existe). Sirve el formato «Notas en texto plano» que exportan otras apps de tarjetas.</p>
-    <div class="grid-2"><div class="field"><label for="imp-deck">Mazo de destino</label><select class="input" id="imp-deck">${db.decks.map((d) => `<option value="${d.id}" ${d.id === ui.addDeck ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ Nuevo mazo…</option></select></div>
-      <div class="field" id="imp-newname-f"><label for="imp-newname">Nombre del nuevo mazo</label><input class="input" id="imp-newname" value="${esc(file.name.replace(/\.[^.]+$/, ''))}"></div></div>
+    <p class="hint" style="margin-top:0"><b>${esc(file.name)}</b>. Una tarjeta por línea: <code>anverso ${'='} reverso</code>, y opcionalmente <code>${'='} sección</code> al final (la sección se crea si no existe).</p>
+    <div class="grid-2">
+      <div class="field"><label for="imp-sep">Separador</label><div class="row" style="flex-wrap:nowrap">
+        <select class="input" id="imp-sep">${Object.entries(SEPARATORS).map(([v, l]) => `<option value="${esc(v)}" ${v === sep ? 'selected' : ''}>${l}</option>`).join('')}<option value="__custom" ${known ? '' : 'selected'}>Otro…</option></select>
+        <input class="input" id="imp-sep-custom" style="width:90px;${known ? 'display:none' : ''}" placeholder="p. ej. -&gt;" value="${known ? '' : esc(sep)}" aria-label="Separador personalizado"></div></div>
+      <div class="field"><label for="imp-deck">Mazo de destino</label><select class="input" id="imp-deck">${db.decks.map((d) => `<option value="${d.id}" ${d.id === ui.addDeck ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ Nuevo mazo…</option></select></div>
+    </div>
+    <div class="field" id="imp-newname-f"><label for="imp-newname">Nombre del nuevo mazo</label><input class="input" id="imp-newname" value="${esc(file.name.replace(/\.[^.]+$/, ''))}"></div>
     <label class="check"><input type="checkbox" id="imp-header"> La primera fila es un encabezado</label>
     <label class="check"><input type="checkbox" id="imp-dupes" checked> Omitir tarjetas cuyo anverso ya exista en el mazo</label>
-    <div class="panel" style="margin-top:12px;box-shadow:none"><table class="table"><thead><tr><th>Anverso</th><th>Reverso</th><th>Sección</th></tr></thead><tbody>
-      ${rows.slice(0, 5).map((r) => `<tr><td class="cell-clip">${esc(r[0])}</td><td class="cell-clip">${esc(r[1])}</td><td>${esc(r[2] || '—')}</td></tr>`).join('')}</tbody></table></div>
-    </div><div class="modal-foot"><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit">Importar</button></div></form>`, { wide: true });
-  const sync = () => { $('#imp-newname-f').style.visibility = $('#imp-deck').value === '__new' ? 'visible' : 'hidden'; };
+    <div class="small muted" id="imp-summary" style="margin-top:10px"></div>
+    <div class="panel" style="margin-top:6px;box-shadow:none"><table class="table"><thead><tr><th>Anverso</th><th>Reverso</th><th>Sección</th></tr></thead><tbody id="imp-preview"></tbody></table></div>
+    </div><div class="modal-foot"><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit" id="imp-ok">Importar</button></div></form>`, { wide: true });
+
+  const valid = (r) => r.length >= 2 && r[0] && r[1];
+  const update = () => {
+    const v = $('#imp-sep').value;
+    $('#imp-sep-custom').style.display = v === '__custom' ? '' : 'none';
+    sep = v === '__custom' ? $('#imp-sep-custom').value : v;
+    rows = sep ? parseDelimited(file.content, sep) : [];
+    const data = rows.slice($('#imp-header').checked ? 1 : 0);
+    const ok = data.filter(valid).length;
+    const bad = data.length - ok;
+    $('#imp-summary').textContent = `${plural(ok, 'tarjeta lista para importar', 'tarjetas listas para importar')}${bad ? ` · ${plural(bad, 'línea sin separador se omitirá', 'líneas sin separador se omitirán')}` : ''}`;
+    $('#imp-preview').innerHTML = data.slice(0, 6).map((r) => `<tr${valid(r) ? '' : ' class="muted"'}><td class="cell-clip">${esc(r[0])}</td><td class="cell-clip">${valid(r) ? esc(r[1]) : '<i>sin separador</i>'}</td><td>${esc(r[2] || '—')}</td></tr>`).join('')
+      || '<tr><td colspan="3" class="muted">No hay líneas</td></tr>';
+    $('#imp-ok').disabled = !ok;
+    $('#imp-newname-f').style.display = $('#imp-deck').value === '__new' ? '' : 'none';
+  };
   if (!db.decks.length) $('#imp-deck').value = '__new';
-  sync();
-  $('#imp-deck').onchange = sync;
+  m.querySelector('form').addEventListener('change', update);
+  $('#imp-sep-custom').oninput = update;
+  update();
+
   m.querySelector('form').onsubmit = (e) => {
     e.preventDefault();
     let deck;
