@@ -56,8 +56,25 @@ programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 
 ## 100 % local
 
-Memora no necesita internet ni cuentas: todo se guarda en tu equipo. La app
-bloquea cualquier conexión de red; solo carga sus propios archivos.
+Memora no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
+tiene bloqueada cualquier conexión de red. La única excepción es el botón
+**Buscar actualizaciones**: solo cuando lo pulsas, Memora consulta la última
+release de este repositorio en GitHub.
+
+## Actualizaciones
+
+En **Ajustes → Actualizaciones**, o con el botón de la parte inferior de la barra
+lateral, pulsa **Buscar actualizaciones**. Si hay una versión nueva verás sus
+novedades y el botón **Descargar e instalar**. Memora descarga el instalador,
+comprueba su tamaño y su huella SHA-256 publicada por GitHub, lo instala en
+silencio y se vuelve a abrir. Tus tarjetas y ajustes se conservan.
+
+- Solo funciona en copias instaladas con `Memora-Setup-*.exe`. La versión portable
+  muestra el enlace a la página de descarga.
+- El actualizador existe a partir de la 1.0.3: si tienes una versión anterior,
+  instala la 1.0.3 a mano una vez.
+- Para publicar una versión nueva basta con cambiar `"version"` en `package.json`
+  y subir el cambio a `main`: GitHub Actions compila el instalador y crea la release.
 
 ## Uso
 
@@ -107,6 +124,7 @@ Las copias diarias están en la subcarpeta `backups/`.
 
 ```
 main.js            Proceso principal de Electron (ventana, archivos, copias)
+updater.js         Búsqueda, descarga verificada e instalación de actualizaciones
 preload.js         Puente seguro entre la interfaz y el sistema de archivos
 src/index.html     Interfaz
 src/app.js         Lógica de la interfaz (vistas, sesiones, importación)

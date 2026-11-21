@@ -112,6 +112,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; ba
 .nav svg { width: 17px; height: 17px; flex: none; }
 .side-title { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); font-weight: 600; border-top: 1px solid var(--border); }
 .deck-tree { list-style: none; margin: 0; padding: 0 10px 16px; overflow-y: auto; flex: 1; }
+.side-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 12px 18px; border-top: 1px solid var(--border); }
 .deck-tree ul { list-style: none; margin: 0 0 4px; padding: 0 0 0 16px; }
 .tree-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px; cursor: pointer; min-height: 30px; }
 .tree-row:hover { background: var(--surface-2); }
@@ -330,3 +331,18 @@ tr[draggable="true"] { cursor: grab; }
 .empty h2 { color: var(--text); margin-bottom: 6px; }
 .info-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px 16px; font-size: 12px; background: var(--surface-2); padding: 10px 12px; border-radius: 9px; margin-bottom: 14px; }
 .info-grid b { display: block; font-size: 13px; color: var(--text); font-weight: 600; }
+
+/* actualizaciones */
+.upd-line { display: flex; align-items: center; gap: 10px; margin: 4px 0 0; }
+.upd-line.ok { color: var(--good); font-weight: 600; }
+.upd-line.bad { color: var(--danger); }
+.upd-new { border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--border)); background: var(--accent-soft); border-radius: 10px; padding: 12px 14px; }
+.upd-title { font-size: 15px; }
+.upd-notes { font-size: 13px; color: var(--text-2); margin-top: 8px; max-height: 180px; overflow-y: auto; }
+.upd-notes p { margin: 4px 0; }
+.upd-notes ul { margin: 4px 0; padding-left: 20px; }
+.upd-notes li { margin: 3px 0; }
+.upd-progress { height: 8px; border-radius: 4px; background: var(--surface-2); overflow: hidden; margin-top: 6px; }
+.upd-progress > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .15s; }
+.spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
+@keyframes spin { to { transform: rotate(360deg); } }

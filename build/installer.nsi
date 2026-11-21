@@ -26,6 +26,8 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "${APPNAME}"
 
 !include "MUI2.nsh"
+!include "LogicLib.nsh"
+!include "FileFunc.nsh"
 !define MUI_ICON "icon.ico"
 !define MUI_UNICON "icon.ico"
 !define MUI_ABORTWARNING
@@ -65,6 +67,14 @@ Section "Memora" SecMain
   WriteRegStr HKCU "${UNINSTKEY}" "UninstallString" '"$INSTDIR\Desinstalar Memora.exe"'
   WriteRegDWORD HKCU "${UNINSTKEY}" "NoModify" 1
   WriteRegDWORD HKCU "${UNINSTKEY}" "NoRepair" 1
+
+  ; Actualización desde la app: «Memora-Setup.exe /S /RELAUNCH» vuelve a abrir Memora al terminar.
+  ${GetParameters} $R0
+  ClearErrors
+  ${GetOptions} $R0 "/RELAUNCH" $R1
+  ${IfNot} ${Errors}
+    Exec '"$INSTDIR\${EXENAME}"'
+  ${EndIf}
 SectionEnd
 
 Section "Uninstall"

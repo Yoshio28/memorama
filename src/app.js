@@ -12,7 +12,8 @@ let view = { name: 'home' };
 let session = null;
 let saveTimer = null;
 let lastCreated = 0;
-const ui = { collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
+let appVersion = '';
+const ui = { update: { status: 'idle' }, collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
 
 // ---------------------------------------------------------------- utilidades
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -381,7 +382,11 @@ function renderSidebar() {
     <div class="brand"><span class="logo">M</span>Memora</div>
     <nav class="nav">${navBtn('home', 'Inicio')}${navBtn('add', 'Añadir tarjetas')}${navBtn('browse', 'Explorar')}${navBtn('stats', 'Estadísticas')}${navBtn('settings', 'Ajustes')}</nav>
     <div class="side-title"><span>Mazos y secciones</span><button class="icon-btn" data-act="new-deck" title="Nuevo mazo" aria-label="Nuevo mazo">${ICON.add}</button></div>
-    <ul class="deck-tree">${decks || '<li class="muted small" style="padding:8px">Aún no hay mazos</li>'}</ul>`;
+    <ul class="deck-tree">${decks || '<li class="muted small" style="padding:8px">Aún no hay mazos</li>'}</ul>
+    <div class="side-foot"><span class="small muted">Memora ${esc(appVersion)}</span>
+      ${ui.update.status === 'available'
+        ? `<button class="btn sm primary" data-act="check-update">Actualizar a ${esc(ui.update.info.latest)}</button>`
+        : '<button class="btn sm ghost" data-act="check-update">Buscar actualizaciones</button>'}</div>`;
 }
 
 // ---------------------------------------------------------------- Inicio
@@ -777,6 +782,7 @@ function renderSettings() {
   const set = db.settings;
   $('#main').innerHTML = `<div class="page" style="max-width:820px">
     <div class="page-head"><div><h1>Ajustes</h1><div class="sub">Se guardan automáticamente.</div></div></div>
+    <div class="panel pad" id="upd-panel" style="margin-bottom:16px">${updatePanelHtml()}</div>
     <div class="panel pad" style="margin-bottom:16px"><h2 style="margin-bottom:14px">Apariencia</h2>
       <div class="seg" id="theme">${[['system', 'Sistema'], ['light', 'Claro'], ['dark', 'Oscuro']].map(([v, l]) => `<label><input type="radio" name="theme" value="${v}" ${set.theme === v ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div></div>
     <div class="panel pad" style="margin-bottom:16px"><h2 style="margin-bottom:4px">Algoritmo de repaso</h2><p class="hint" style="margin:0 0 14px">Valores por defecto razonables; cámbialos solo si sabes lo que buscas.</p>
@@ -808,6 +814,99 @@ function renderSettings() {
   bind('#s-max', (v) => { o.maxInterval = Math.max(1, +v || 36500); });
   bind('#s-newday', (v) => { set.defaultNewPerDay = Math.max(0, +v || 0); });
   bind('#s-revday', (v) => { set.defaultReviewsPerDay = Math.max(0, +v || 0); });
+}
+
+// ---------------------------------------------------------------- Actualizaciones
+const mb = (bytes) => (bytes / 1048576).toFixed(1).replace('.', ',');
+const ipcError = (err) => String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+
+/** Novedades de la versión más reciente (primer bloque «## …» de las notas de la release). */
+function releaseNotesHtml(md) {
+  const lines = String(md || '').replace(/\r/g, '').split('\n');
+  const out = [];
+  let headings = 0;
+  for (const line of lines) {
+    if (/^##\s/.test(line)) { if (++headings > 1) break; continue; }
+    if (/^-\s/.test(line)) out.push(`<li>${rich(line.slice(2))}</li>`);
+    else if (line.trim() && !/^>/.test(line)) out.push(`<p>${rich(line)}</p>`);
+  }
+  const html = out.join('').replace(/(<li>.*?<\/li>)+/gs, (m) => `<ul>${m}</ul>`);
+  return html ? `<div class="upd-notes">${html}</div>` : '';
+}
+
+function updatePanelHtml() {
+  const u = ui.update;
+  const busy = ['checking', 'downloading', 'installing'].includes(u.status);
+  let body = '';
+  if (u.status === 'idle') body = '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, se descarga e instala sola y Memora se vuelve a abrir.</p>';
+  else if (u.status === 'checking') body = '<p class="upd-line"><span class="spinner"></span>Buscando actualizaciones…</p>';
+  else if (u.status === 'uptodate') body = `<p class="upd-line ok">✓ Tienes la última versión (${esc(u.info.latest)}).</p>`;
+  else if (u.status === 'available') {
+    const i = u.info;
+    body = `<div class="upd-new"><div class="upd-title">Hay una versión nueva: <b>${esc(i.latest)}</b> <span class="muted">· tienes la ${esc(i.current)}</span></div>
+      ${releaseNotesHtml(i.notes)}
+      <div class="row" style="margin-top:12px">${i.canInstall
+        ? `<button class="btn primary" data-act="install-update">Descargar e instalar (${mb(i.size)} MB)</button>`
+        : `<button class="btn primary" data-act="open-release">Abrir página de descarga</button><span class="hint">Esta copia no se instaló con el instalador (por ejemplo, la versión portable), así que no puede actualizarse sola.</span>`}</div></div>`;
+  } else if (u.status === 'downloading') {
+    const pct = u.total ? Math.min(100, Math.round((u.received / u.total) * 100)) : 0;
+    body = `<div class="upd-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
+      <p class="hint">Descargando Memora ${esc(u.info.latest)}… ${mb(u.received || 0)} de ${mb(u.total || 0)} MB (${pct} %)</p>`;
+  } else if (u.status === 'installing') {
+    body = `<p class="upd-line"><span class="spinner"></span>Instalando Memora ${esc(u.info.latest)}… Se cerrará y volverá a abrirse en unos segundos.</p>`;
+  } else if (u.status === 'error') body = `<p class="upd-line bad">${esc(u.error)}</p>`;
+  return `<div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>Actualizaciones</h2><span class="small muted">Versión instalada: <b>${esc(appVersion)}</b></span></div>
+    ${body}
+    ${busy || u.status === 'available' ? '' : '<div class="row" style="margin-top:12px"><button class="btn" data-act="check-update">Buscar actualizaciones</button></div>'}
+    <p class="hint" style="margin:12px 0 0">Memora solo se conecta a internet cuando pulsas «Buscar actualizaciones». El resto del tiempo funciona sin conexión.</p>`;
+}
+
+function renderUpdatePanel() {
+  const el = $('#upd-panel');
+  if (el) el.innerHTML = updatePanelHtml();
+  if (view.name !== 'study') renderSidebar();
+}
+
+async function checkUpdate() {
+  ui.update = { status: 'checking' };
+  renderUpdatePanel();
+  try {
+    const info = await api.checkUpdate();
+    ui.update = { status: info.newer ? 'available' : 'uptodate', info };
+  } catch (err) {
+    ui.update = { status: 'error', error: ipcError(err) };
+  }
+  renderUpdatePanel();
+}
+
+async function installUpdate() {
+  const info = ui.update.info;
+  const ok = await confirmBox({
+    title: `Actualizar a la versión ${esc(info.latest)}`,
+    message: `Se descargará Memora ${esc(info.latest)} (${mb(info.size)} MB). Después Memora se cerrará unos segundos para instalarla y se volverá a abrir sola.<br><br>Tus tarjetas, mazos y ajustes se conservan.`,
+    okText: 'Descargar e instalar',
+  });
+  if (!ok) return;
+  await flush();
+  ui.update = { status: 'downloading', info, received: 0, total: info.size };
+  renderUpdatePanel();
+  let lastPaint = 0;
+  const off = api.onUpdateProgress((p) => {
+    if (ui.update.status !== 'downloading') return;
+    ui.update.received = p.received;
+    ui.update.total = p.total || info.size;
+    const t = Date.now();
+    if (t - lastPaint > 120 || p.received >= ui.update.total) { lastPaint = t; renderUpdatePanel(); }
+  });
+  try {
+    await api.installUpdate();
+    ui.update = { status: 'installing', info };
+  } catch (err) {
+    ui.update = { status: 'error', error: ipcError(err), info };
+  } finally {
+    off();
+  }
+  renderUpdatePanel();
 }
 
 // ---------------------------------------------------------------- Sesión de estudio
@@ -1629,6 +1728,12 @@ const actions = {
   'export-json': exportJson,
   'import-json': importJson,
   'open-folder': () => api.openDataFolder(),
+  'check-update': () => {
+    if (view.name !== 'settings') go({ name: 'settings' });
+    if (!['available', 'checking', 'downloading', 'installing'].includes(ui.update.status)) checkUpdate();
+  },
+  'install-update': installUpdate,
+  'open-release': () => api.openReleasePage(),
 };
 
 document.addEventListener('click', (e) => {
@@ -1720,6 +1825,7 @@ function toast(msg) {
 (async function init() {
   let raw = null;
   try { raw = await api.load(); } catch (err) { console.error(err); }
+  try { appVersion = await api.version(); } catch { appVersion = ''; }
   if (raw) {
     try {
       db = migrate(JSON.parse(raw));

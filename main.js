@@ -3,6 +3,7 @@
 const { app, BrowserWindow, ipcMain, dialog, shell, Menu, session } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const updater = require('./updater');
 
 if (process.env.MEMORA_DATA_DIR) app.setPath('userData', path.resolve(process.env.MEMORA_DATA_DIR));
 
@@ -80,6 +81,14 @@ ipcMain.handle('file:open', async (e, { filters }) => {
 });
 
 ipcMain.handle('app:openDataFolder', () => shell.openPath(dataDir()));
+ipcMain.handle('app:version', () => app.getVersion());
+
+// Actualizaciones (solo se conecta a internet cuando el usuario lo pide)
+ipcMain.handle('update:check', () => updater.check());
+ipcMain.handle('update:install', (e) => updater.install((received, total) => {
+  if (!e.sender.isDestroyed()) e.sender.send('update:progress', { received, total });
+}));
+ipcMain.handle('update:openPage', () => updater.openPage());
 
 function createWindow() {
   const win = new BrowserWindow({

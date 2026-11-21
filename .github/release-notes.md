@@ -1,13 +1,11 @@
-## Novedades en 1.0.2
-- **Se quitan los mazos de ejemplo al actualizar**: si venías de la 1.0.0, «Capitales del mundo» e «Inglés básico» se eliminan solos al abrir la app. Para no borrar nada tuyo, solo se quitan si siguen intactos; si añadiste o editaste tarjetas en ellos, se conservan y puedes borrarlos desde el mazo → *Opciones* → *Eliminar mazo*. Tus demás mazos no se tocan.
+## Novedades en 1.0.3
+- **Actualizaciones desde la app**: en *Ajustes → Actualizaciones*, o desde el botón de la barra lateral, pulsa **Buscar actualizaciones**. Si hay una versión nueva verás sus novedades y podrás **descargarla e instalarla** sin pasar por el asistente: Memora comprueba que la descarga sea íntegra (SHA-256), se instala en silencio y se vuelve a abrir sola. Tus tarjetas se conservan.
+- Memora solo se conecta a internet cuando pulsas ese botón; el resto del tiempo sigue funcionando sin conexión.
 
-## Novedades en 1.0.1
-- La app empieza vacía, sin mazos de ejemplo.
-- El botón «Importar» siempre está visible, también en pantallas bajas o con el escalado de Windows.
-- Al importar puedes corregir (añadiendo el separador) o eliminar las líneas sin separador.
+> Las versiones anteriores no tienen este botón: instala esta 1.0.3 a mano una vez y, a partir de ahí, podrás actualizar desde la propia app.
 
 ## Descargas (Windows 64 bits)
-- **Memora-Setup-1.0.2.exe**: instalador. Si ya tienes Memora, se actualiza conservando tus tarjetas.
-- **Memora-Portable-1.0.2.zip**: no requiere instalación. Descomprímelo y abre `Memora.exe`.
+- **Memora-Setup-1.0.3.exe**: instalador. Si ya tienes Memora, se actualiza conservando tus tarjetas.
+- **Memora-Portable-1.0.3.zip**: no requiere instalación (la versión portable no se actualiza sola).
 
 > El programa no tiene firma digital. Si aparece «Windows protegió su PC», pulsa **Más información → Ejecutar de todas formas**.
