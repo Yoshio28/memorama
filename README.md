@@ -41,15 +41,15 @@ Además añade dos cosas:
   ```
 
   Puedes cambiar el separador (tabulador, `;`, `,`, `|`, `:` o uno propio) y ver
-  la vista previa al momento. Las líneas sin separador se omiten y se avisa
-  cuántas son. También sirve el formato «Notas en texto plano» que exportan otras
+  la vista previa al momento. Las líneas sin separador aparecen en una lista donde
+  puedes corregirlas (añadiendo el separador) o eliminarlas antes de importar. También sirve el formato «Notas en texto plano» que exportan otras
   apps de flashcards. Se puede exportar un mazo a CSV y hacer copias completas en JSON.
 - Guardado automático y copia de seguridad diaria (se conservan 14).
 - Tema claro, oscuro o el del sistema.
 
 ## Descargar
 
-**Windows:** descarga `Memora-Setup-1.0.0.exe` desde
+**Windows:** descarga `Memora-Setup-<versión>.exe` desde
 [Releases](https://github.com/Yoshio28/memorama/releases/latest) y ábrelo. El
 programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 **Más información → Ejecutar de todas formas**. También hay una versión portable en `.zip`.

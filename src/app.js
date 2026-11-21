@@ -86,30 +86,6 @@ function makeCard(deckId, sectionId, front, back) {
   return { id: uid(), deckId, sectionId: sectionId || null, front, back, flag: false, created: nextCreated(), srs: S.newSrs() };
 }
 
-function seed() {
-  const d1 = makeDeck('Capitales del mundo');
-  db.decks.push(d1);
-  const data = {
-    Europa: [['Francia', 'París'], ['Alemania', 'Berlín'], ['Portugal', 'Lisboa'], ['Polonia', 'Varsovia'], ['Noruega', 'Oslo'], ['Hungría', 'Budapest']],
-    América: [['Perú', 'Lima'], ['Canadá', 'Ottawa'], ['Chile', 'Santiago'], ['Colombia', 'Bogotá'], ['Uruguay', 'Montevideo'], ['Brasil', 'Brasilia']],
-    Asia: [['Japón', 'Tokio'], ['Corea del Sur', 'Seúl'], ['Tailandia', 'Bangkok'], ['Vietnam', 'Hanói']],
-  };
-  for (const [secName, pairs] of Object.entries(data)) {
-    const sec = makeSection(d1, secName);
-    for (const [f, b] of pairs) db.cards.push(makeCard(d1.id, sec.id, `¿Cuál es la capital de **${f}**?`, b));
-  }
-  const d2 = makeDeck('Inglés básico');
-  db.decks.push(d2);
-  const verbs = makeSection(d2, 'Verbos irregulares');
-  for (const [f, b] of [['to go', 'went · gone'], ['to eat', 'ate · eaten'], ['to see', 'saw · seen'], ['to write', 'wrote · written']]) {
-    db.cards.push(makeCard(d2.id, verbs.id, `Pasado y participio de *${f}*`, b));
-  }
-  const voc = makeSection(d2, 'Vocabulario');
-  for (const [f, b] of [['manzana', 'apple'], ['biblioteca', 'library'], ['cumpleaños', 'birthday'], ['aprender', 'to learn']]) {
-    db.cards.push(makeCard(d2.id, voc.id, f, b));
-  }
-}
-
 function migrate(d) {
   const base = emptyDb();
   d.settings = Object.assign(base.settings, d.settings || {});
@@ -395,7 +371,7 @@ function renderHome() {
 
   $('#main').innerHTML = `<div class="page">
     <div class="page-head"><div><h1>Hola de nuevo</h1><div class="sub">${new Date().toLocaleDateString('es', { weekday: 'long', day: 'numeric', month: 'long' })}</div></div>
-      <div class="row"><button class="btn" data-act="custom-study">Estudio personalizado</button><button class="btn primary" data-act="new-deck">${ICON.add}Nuevo mazo</button></div></div>
+      <div class="row"><button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn" data-act="custom-study">Estudio personalizado</button><button class="btn primary" data-act="new-deck">${ICON.add}Nuevo mazo</button></div></div>
     <div class="strip">
       <div class="tile"><div class="label">Pendientes hoy</div><div class="value">${all.n + all.l + all.r}</div><div class="hint">${all.n} nuevas · ${all.l} aprendiendo · ${all.r} repasos</div></div>
       <div class="tile"><div class="label">Respondidas hoy</div><div class="value">${todayLog.length}</div><div class="hint">${todayLog.length ? Math.round((correct / todayLog.length) * 100) + ' % de aciertos' : 'Aún no has estudiado'}</div></div>
@@ -403,7 +379,8 @@ function renderHome() {
       <div class="tile"><div class="label">Colección</div><div class="value">${db.cards.length}</div><div class="hint">${plural(db.decks.length, 'mazo', 'mazos')} · ${plural(db.decks.reduce((a, d) => a + d.sections.length, 0), 'sección', 'secciones')}</div></div>
     </div>
     ${db.decks.length ? `<div class="panel"><table class="table"><thead><tr><th>Mazo / sección</th><th class="r c-new">Nuevas</th><th class="r c-learn">Aprendiendo</th><th class="r c-review">Repasar</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
-      : `<div class="panel empty"><h2>Crea tu primer mazo</h2><p>Los mazos agrupan tarjetas; dentro de cada mazo puedes organizarlas en secciones.</p><button class="btn primary" data-act="new-deck">Nuevo mazo</button></div>`}
+      : `<div class="panel empty"><h2>Crea tu primer mazo</h2><p>Los mazos agrupan tarjetas; dentro de cada mazo puedes organizarlas en secciones.<br>También puedes importar tus tarjetas desde un archivo de texto (<code>pregunta = respuesta</code>, una por línea).</p>
+        <div class="row" style="justify-content:center"><button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn primary" data-act="new-deck">Nuevo mazo</button></div></div>`}
     <div class="section-head"><div><h2>Modos de estudio</h2><div class="small muted">Combinaciones guardadas de mazos, secciones y opciones. Empiézalas con un clic.</div></div></div>
     <div class="preset-grid">${presets}<div class="preset add" data-act="custom-study" role="button" tabindex="0">${ICON.add.replace('<svg', '<svg width="22" height="22"')}<span>Crear modo de estudio</span></div></div>
   </div>`;
@@ -451,6 +428,7 @@ function renderDeck() {
     <div class="page-head"><div><h1>${esc(d.name)}</h1><div class="sub">${plural(cards.length, 'tarjeta', 'tarjetas')} · ${plural(d.sections.length, 'sección', 'secciones')}</div></div>
       <div class="row">
         <button class="btn" data-act="deck-options" data-id="${d.id}">Opciones</button>
+        <button class="btn" data-act="import-csv" data-id="${d.id}">Importar…</button>
         <button class="btn" data-act="add-to" data-id="${d.id}" data-section="${sel && sel !== 'none' ? sel : ''}">${ICON.add}Añadir</button>
         <button class="btn" data-act="custom-study" data-id="${d.id}">Estudio personalizado</button>
         <button class="btn primary" data-act="study-deck" data-id="${d.id}" ${c.n + c.l + c.r ? '' : 'disabled'}>${ICON.play}Estudiar mazo (${c.n + c.l + c.r})</button></div></div>
@@ -505,7 +483,8 @@ function cardTable(cards, { showDeck = true, draggable = false, selectable = fal
 // ---------------------------------------------------------------- Añadir
 function renderAdd() {
   if (!db.decks.length) {
-    $('#main').innerHTML = `<div class="page"><div class="panel empty"><h2>Primero crea un mazo</h2><p>Las tarjetas se guardan dentro de un mazo.</p><button class="btn primary" data-act="new-deck">Nuevo mazo</button></div></div>`;
+    $('#main').innerHTML = `<div class="page"><div class="panel empty"><h2>Primero crea un mazo</h2><p>Las tarjetas se guardan dentro de un mazo. También puedes importarlas desde un archivo de texto y el mazo se crea solo.</p>
+      <div class="row" style="justify-content:center"><button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn primary" data-act="new-deck">Nuevo mazo</button></div></div></div>`;
     return;
   }
   if (!deckById(ui.addDeck)) ui.addDeck = db.decks[0].id;
@@ -1346,59 +1325,123 @@ function defaultSeparator(name, text) {
   return first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
 }
 
-async function importCsv() {
+async function importCsv(targetDeckId) {
   const file = await api.openFile({ filters: [{ name: 'Archivos de texto', extensions: ['txt', 'csv', 'tsv'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
   if (!file) return;
   let sep = defaultSeparator(file.name, file.content);
-  let rows = [];
+  let rows = [];        // filas parseadas; null = línea eliminada por el usuario
+  let fixIdx = [];      // filas que no tenían separador al leer el archivo
   const known = Object.prototype.hasOwnProperty.call(SEPARATORS, sep);
+  const preselect = deckById(targetDeckId)?.id || deckById(ui.addDeck)?.id || '';
+  // El tabulador no se puede escribir en un campo de texto: para corregir líneas se usa «=».
+  const fixSep = () => (sep === '\t' ? '=' : sep);
+  const valid = (r) => !!r && r.length >= 2 && !!r[0] && !!r[1];
+  const start = () => ($('#imp-header').checked ? 1 : 0);
+  const rowText = (r) => (r.length === 1 ? r[0] : r.join(` ${fixSep()} `));
+
   const m = openModal(`${modalHead('Importar tarjetas')}<form><div class="modal-body">
-    <p class="hint" style="margin-top:0"><b>${esc(file.name)}</b>. Una tarjeta por línea: <code>anverso ${'='} reverso</code>, y opcionalmente <code>${'='} sección</code> al final (la sección se crea si no existe).</p>
+    <p class="hint" style="margin-top:0"><b>${esc(file.name)}</b>. Una tarjeta por línea: <code>anverso = reverso</code>, y opcionalmente <code>= sección</code> al final (la sección se crea si no existe).</p>
     <div class="grid-2">
       <div class="field"><label for="imp-sep">Separador</label><div class="row" style="flex-wrap:nowrap">
         <select class="input" id="imp-sep">${Object.entries(SEPARATORS).map(([v, l]) => `<option value="${esc(v)}" ${v === sep ? 'selected' : ''}>${l}</option>`).join('')}<option value="__custom" ${known ? '' : 'selected'}>Otro…</option></select>
         <input class="input" id="imp-sep-custom" style="width:90px;${known ? 'display:none' : ''}" placeholder="p. ej. -&gt;" value="${known ? '' : esc(sep)}" aria-label="Separador personalizado"></div></div>
-      <div class="field"><label for="imp-deck">Mazo de destino</label><select class="input" id="imp-deck">${db.decks.map((d) => `<option value="${d.id}" ${d.id === ui.addDeck ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new">+ Nuevo mazo…</option></select></div>
+      <div class="field"><label for="imp-deck">Mazo de destino</label><select class="input" id="imp-deck">${db.decks.map((d) => `<option value="${d.id}" ${d.id === preselect ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new" ${preselect ? '' : 'selected'}>+ Nuevo mazo…</option></select></div>
     </div>
     <div class="field" id="imp-newname-f"><label for="imp-newname">Nombre del nuevo mazo</label><input class="input" id="imp-newname" value="${esc(file.name.replace(/\.[^.]+$/, ''))}"></div>
     <label class="check"><input type="checkbox" id="imp-header"> La primera fila es un encabezado</label>
     <label class="check"><input type="checkbox" id="imp-dupes" checked> Omitir tarjetas cuyo anverso ya exista en el mazo</label>
-    <div class="small muted" id="imp-summary" style="margin-top:10px"></div>
+    <div id="imp-fix"></div>
+    <div class="small muted" id="imp-summary" style="margin-top:12px"></div>
     <div class="panel" style="margin-top:6px;box-shadow:none"><table class="table"><thead><tr><th>Anverso</th><th>Reverso</th><th>Sección</th></tr></thead><tbody id="imp-preview"></tbody></table></div>
-    </div><div class="modal-foot"><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit" id="imp-ok">Importar</button></div></form>`, { wide: true });
+    </div><div class="modal-foot"><span class="small muted" id="imp-foot-hint"></span><span class="spacer"></span><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit" id="imp-ok">Importar</button></div></form>`, { wide: true });
 
-  const valid = (r) => r.length >= 2 && r[0] && r[1];
-  const update = () => {
+  /** Recuentos, vista previa y botón (no toca la lista de correcciones para no perder el foco). */
+  const refresh = () => {
+    const data = rows.slice(start()).filter(Boolean);
+    const ok = data.filter(valid);
+    const pending = data.length - ok.length;
+    $('#imp-summary').textContent = `Vista previa · ${plural(ok.length, 'tarjeta lista para importar', 'tarjetas listas para importar')}`;
+    $('#imp-preview').innerHTML = ok.slice(0, 6).map((r) => `<tr><td class="cell-clip">${esc(r[0])}</td><td class="cell-clip">${esc(r[1])}</td><td>${esc(r[2] || '—')}</td></tr>`).join('')
+      + (ok.length > 6 ? `<tr><td colspan="3" class="small muted">… y ${ok.length - 6} más</td></tr>` : '')
+      || '<tr><td colspan="3" class="muted">Ninguna línea tiene anverso y reverso todavía.</td></tr>';
+    const btn = $('#imp-ok');
+    btn.disabled = !ok.length;
+    btn.textContent = ok.length ? `Importar ${plural(ok.length, 'tarjeta', 'tarjetas')}` : 'Importar';
+    $('#imp-foot-hint').textContent = pending ? `${plural(pending, 'línea sin separador se omitirá', 'líneas sin separador se omitirán')}` : '';
+    const counter = $('#fix-count');
+    if (counter) counter.textContent = pending ? plural(pending, 'línea sin separador', 'líneas sin separador') : 'Todas las líneas están listas';
+    $('#imp-newname-f').style.display = $('#imp-deck').value === '__new' ? '' : 'none';
+  };
+
+  /** Lista de líneas sin separador, cada una editable y con botón para eliminarla. */
+  const renderFix = () => {
+    const idx = fixIdx.filter((i) => i >= start() && rows[i]);
+    const box = $('#imp-fix');
+    if (!idx.length) { box.innerHTML = ''; return; }
+    const sepName = sep === '\t' ? '«=» (equivale al tabulador)' : `«${esc(fixSep())}»`;
+    box.innerHTML = `<div class="fix-box">
+      <div class="fix-head"><div><b id="fix-count"></b><div class="small muted">Escribe ${sepName} entre el anverso y el reverso para convertirlas en tarjetas, o elimínalas.</div></div>
+        <button type="button" class="btn sm danger" id="fix-del-all">Eliminar las que falten</button></div>
+      <div class="fix-list">${idx.slice(0, 300).map((i) => `<div class="fix-row ${valid(rows[i]) ? 'ok' : ''}" data-i="${i}">
+        <input class="input" value="${esc(rowText(rows[i]))}" aria-label="Línea ${i + 1}" spellcheck="false">
+        <span class="fix-state">${valid(rows[i]) ? '✓ Lista' : 'Sin separador'}</span>
+        <button type="button" class="icon-btn" data-fix-del title="Eliminar esta línea" aria-label="Eliminar esta línea">${ICON.trash}</button></div>`).join('')}
+        ${idx.length > 300 ? `<div class="small muted" style="padding:6px 0">Mostrando 300 de ${idx.length}. Usa «Eliminar las que falten» o corrige el archivo.</div>` : ''}</div></div>`;
+    $$('.fix-row', box).forEach((row) => {
+      const i = +row.dataset.i;
+      const inp = row.querySelector('input');
+      inp.oninput = () => {
+        const parsed = parseDelimited(inp.value, fixSep())[0] || [inp.value.trim()];
+        rows[i] = parsed;
+        const ok = valid(parsed);
+        row.classList.toggle('ok', ok);
+        row.querySelector('.fix-state').textContent = ok ? '✓ Lista' : 'Sin separador';
+        refresh();
+      };
+      inp.onkeydown = (e) => {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        const next = row.nextElementSibling?.querySelector('input');
+        if (next) next.focus();
+      };
+      row.querySelector('[data-fix-del]').onclick = () => { rows[i] = null; renderFix(); refresh(); };
+    });
+    $('#fix-del-all').onclick = () => {
+      for (const i of idx) if (!valid(rows[i])) rows[i] = null;
+      renderFix();
+      refresh();
+    };
+  };
+
+  /** Vuelve a leer el archivo con el separador elegido. */
+  const reparse = () => {
     const v = $('#imp-sep').value;
     $('#imp-sep-custom').style.display = v === '__custom' ? '' : 'none';
     sep = v === '__custom' ? $('#imp-sep-custom').value : v;
     rows = sep ? parseDelimited(file.content, sep) : [];
-    const data = rows.slice($('#imp-header').checked ? 1 : 0);
-    const ok = data.filter(valid).length;
-    const bad = data.length - ok;
-    $('#imp-summary').textContent = `${plural(ok, 'tarjeta lista para importar', 'tarjetas listas para importar')}${bad ? ` · ${plural(bad, 'línea sin separador se omitirá', 'líneas sin separador se omitirán')}` : ''}`;
-    $('#imp-preview').innerHTML = data.slice(0, 6).map((r) => `<tr${valid(r) ? '' : ' class="muted"'}><td class="cell-clip">${esc(r[0])}</td><td class="cell-clip">${valid(r) ? esc(r[1]) : '<i>sin separador</i>'}</td><td>${esc(r[2] || '—')}</td></tr>`).join('')
-      || '<tr><td colspan="3" class="muted">No hay líneas</td></tr>';
-    $('#imp-ok').disabled = !ok;
-    $('#imp-newname-f').style.display = $('#imp-deck').value === '__new' ? '' : 'none';
+    fixIdx = rows.map((r, i) => (valid(r) ? -1 : i)).filter((i) => i >= 0);
+    renderFix();
+    refresh();
   };
-  if (!db.decks.length) $('#imp-deck').value = '__new';
-  m.querySelector('form').addEventListener('change', update);
-  $('#imp-sep-custom').oninput = update;
-  update();
+
+  $('#imp-sep').onchange = reparse;
+  $('#imp-sep-custom').oninput = reparse;
+  $('#imp-header').onchange = () => { renderFix(); refresh(); };
+  $('#imp-deck').onchange = refresh;
+  reparse();
 
   m.querySelector('form').onsubmit = (e) => {
     e.preventDefault();
+    const data = rows.slice(start()).filter(valid);
+    if (!data.length) return;
     let deck;
     if ($('#imp-deck').value === '__new') { deck = makeDeck($('#imp-newname').value.trim() || 'Importado'); db.decks.push(deck); }
     else deck = deckById($('#imp-deck').value);
     const existing = new Set(db.cards.filter((c) => c.deckId === deck.id).map((c) => c.front.trim().toLowerCase()));
     const skipDupes = $('#imp-dupes').checked;
-    let added = 0, skipped = 0;
-    for (const r of rows.slice($('#imp-header').checked ? 1 : 0)) {
-      const [front, back, secName] = r;
-      if (!front || !back) { skipped++; continue; }
-      if (skipDupes && existing.has(front.toLowerCase())) { skipped++; continue; }
+    let added = 0, dupes = 0;
+    for (const [front, back, secName] of data) {
+      if (skipDupes && existing.has(front.toLowerCase())) { dupes++; continue; }
       let secId = null;
       if (secName) {
         const sec = deck.sections.find((s) => s.name.toLowerCase() === secName.toLowerCase()) || makeSection(deck, secName);
@@ -1410,7 +1453,7 @@ async function importCsv() {
     }
     persist();
     closeModal();
-    toast(`${plural(added, 'tarjeta importada', 'tarjetas importadas')}${skipped ? ` · ${skipped} omitidas` : ''}`);
+    toast(`${plural(added, 'tarjeta importada', 'tarjetas importadas')}${dupes ? ` · ${dupes} repetidas omitidas` : ''}`);
     go({ name: 'deck', id: deck.id });
   };
 }
@@ -1536,7 +1579,7 @@ const actions = {
     persist(); renderBrowseTable(); renderSidebar();
   },
   'bulk-clear': () => { ui.browse.selected.clear(); renderBrowseTable(); },
-  'import-csv': importCsv,
+  'import-csv': (el) => importCsv(el?.dataset?.id),
   'export-csv': exportCsv,
   'export-json': exportJson,
   'import-json': importJson,
@@ -1641,7 +1684,6 @@ function toast(msg) {
     }
   } else {
     db = emptyDb();
-    seed();
     persist();
   }
   applyTheme();

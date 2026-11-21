@@ -1,6 +1,6 @@
 {
   "name": "memora",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Tarjetas de estudio con repetición espaciada, secciones y modos de estudio personalizables",
   "main": "main.js",
   "scripts": {
