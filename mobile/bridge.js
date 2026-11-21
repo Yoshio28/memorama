@@ -6,6 +6,8 @@
  * - Exportar: se comparte el archivo (Drive, correo, Archivos…). Importar: selector de archivos.
  * - Comunidad: src/community-core.js con fetch.
  * - Actualizaciones: se consulta la última release de GitHub y se abre la descarga del APK.
+ * - Cuenta de Google: se abre la página de Google en una pestaña del navegador; la página
+ *   puente (docs/auth/) vuelve a la app con app.memomancer://auth?id_token=…
  */
 (function () {
   'use strict';
@@ -98,8 +100,16 @@
   }
 
   // ---------------------------------------------------------------- comunidad
-  async function fetchText(method, url, { headers, body } = {}) {
+  async function fetchText(method, url, { headers, body, binary } = {}) {
     const res = await fetch(url, { method, headers, body, cache: 'no-store', credentials: 'omit' });
+    if (binary) {
+      const type = (res.headers.get('content-type') || '').split(';')[0];
+      if (!/^image\/(png|jpeg|webp|gif)$/.test(type)) return { status: res.status, base64: '', type };
+      const bytes = new Uint8Array(await res.arrayBuffer());
+      let s = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      return { status: res.status, base64: btoa(s), type };
+    }
     return { status: res.status, text: await res.text() };
   }
   let firebaseCfg = null;
@@ -115,6 +125,48 @@
     },
     version: () => versionP,
   });
+
+  // ---------------------------------------------------------------- cuenta de Google
+  const rand = () => {
+    const b = new Uint8Array(16);
+    crypto.getRandomValues(b);
+    return btoa(String.fromCharCode(...b)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  };
+  let pendingGoogle = null;
+  function finishGoogle(fn) {
+    const p = pendingGoogle;
+    pendingGoogle = null;
+    if (p) fn(p);
+  }
+  async function signInWithGoogle() {
+    if (pendingGoogle) finishGoogle((p) => p.reject(Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'CANCELLED' })));
+    const nonce = rand();
+    const secret = rand();
+    const state = btoa(JSON.stringify({ p: 'a', s: secret })).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const url = await community.account.googleAuthUrl({ nonce, state });
+    const tokenP = new Promise((resolve, reject) => { pendingGoogle = { secret, resolve, reject }; });
+    await Browser.open({ url });
+    const idToken = await tokenP;
+    return community.account.signInWithGoogle(idToken, { nonce });
+  }
+  // La página puente devuelve el control a la app con app.memomancer://auth?id_token=…&state=…
+  App.addListener('appUrlOpen', ({ url }) => {
+    if (!/^app\.memomancer:\/\/auth\b/.test(url || '')) return;
+    const q = new URL(url.replace(/^app\.memomancer:\/\//, 'https://app/')).searchParams;
+    let state = null;
+    try { state = JSON.parse(atob(String(q.get('state') || '').replace(/-/g, '+').replace(/_/g, '/'))); } catch { state = null; }
+    finishGoogle((p) => {
+      if (!state || state.s !== p.secret) return p.reject(new Error('La respuesta no corresponde a este inicio de sesión. Inténtalo de nuevo.'));
+      if (q.get('error') || !q.get('id_token')) return p.reject(Object.assign(new Error(q.get('error') === 'access_denied' ? 'Has cancelado el inicio de sesión.' : 'Google no completó el inicio de sesión.'), { code: 'CANCELLED' }));
+      p.resolve(q.get('id_token'));
+    });
+    Browser.close().catch(() => {});
+  });
+  // Si el usuario cierra la pestaña de Google sin terminar, se cancela (con margen por si el
+  // enlace de vuelta llega justo después).
+  Browser.addListener('browserFinished', () => setTimeout(() => {
+    finishGoogle((p) => p.reject(Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'CANCELLED' })));
+  }, 2500));
 
   // ---------------------------------------------------------------- actualizaciones
   function compareVersions(a, b) {
@@ -157,6 +209,21 @@
     openDataFolder: async () => false,
     version: () => versionP,
     community,
+    account: {
+      status: () => community.account.status(),
+      signInWithGoogle,
+      cancel: async () => finishGoogle((p) => p.reject(Object.assign(new Error('Inicio de sesión cancelado.'), { code: 'CANCELLED' }))),
+      signOut: () => community.account.signOut(),
+      googlePhoto: (url) => community.account.googlePhoto(url).catch(() => null),
+    },
+    cloud: {
+      pull: (known) => community.cloud.pull(known || null),
+      push: (json, expected) => community.cloud.push(json, expected || null, 'Android'),
+    },
+    aux: {
+      read: (name) => readText(name),
+      write: (name, text) => (text === null ? remove(name) : enqueue(() => writeText(name, text))),
+    },
     checkUpdate,
     installUpdate: async () => { throw new Error('En Android la actualización se instala desde el APK descargado.'); },
     openReleasePage: () => Browser.open({ url: pendingUrl || RELEASES_PAGE }),

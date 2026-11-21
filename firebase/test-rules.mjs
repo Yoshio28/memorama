@@ -60,5 +60,26 @@ check(await rep(b, { deckId: 'm1', reason: 'Spam', reporterUid: a.uid }) === 403
 const readRep = await fetch(`${FS}/reports`, { headers: { authorization: `Bearer ${b.token}` } });
 check(readRep.status === 403, 'nadie puede leer las denuncias desde la app');
 
+// Copia en la nube: solo su dueño, y solo con sesión de Google.
+const b64u = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+async function google(sub) {
+  const idt = `${b64u({ alg: 'none' })}.${b64u({ iss: 'https://accounts.google.com', aud: 'demo', sub, email: sub + '@example.com', email_verified: true, iat: Math.floor(Date.now() / 1000), exp: Math.floor(Date.now() / 1000) + 3600 })}.`;
+  const r = await fetch(`${AUTH}/accounts:signInWithIdp?key=demo`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ postBody: `id_token=${idt}&providerId=google.com`, requestUri: 'http://localhost', returnSecureToken: true }) });
+  const j = await r.json();
+  return { uid: j.localId, token: j.idToken };
+}
+const g1 = await google('ana');
+const g2 = await google('eve');
+const meta = (uid, extra = {}) => ({ update: { name: `${DB}/users/${uid}/sync/meta`, fields: fields({ chunks: 1, size: 10, device: 'PC', appVersion: '1.4.0', ...extra }) },
+  updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }] });
+const chunk = (uid, n, bytes = 'aGVsbG8=') => ({ update: { name: `${DB}/users/${uid}/sync/${n}`, fields: { data: { bytesValue: bytes } } } });
+check(await commit(g1, meta(g1.uid)) === 200, 'con Google se puede guardar la copia propia');
+check(await commit(g1, chunk(g1.uid, 'c0')) === 200, 'y sus trozos de datos');
+check(await commit(g1, chunk(g1.uid, 'c99')) === 403, 'no se aceptan más de 10 trozos');
+check(await commit(g1, meta(g1.uid, { admin: 'sí' })) === 403, 'la copia no acepta campos extra');
+check((await fetch(`${FS}/users/${g1.uid}/sync/meta`, { headers: { authorization: `Bearer ${g2.token}` } })).status === 403, 'otra cuenta no puede leer la copia');
+check(await commit(g2, meta(g1.uid)) === 403, 'otra cuenta no puede escribir la copia');
+check(await commit(a, meta(a.uid)) === 403, 'una sesión anónima no tiene copia en la nube');
+
 console.log(failed ? `\n${failed} comprobaciones fallidas` : '\nTodas las reglas se comportan como se espera');
 process.exit(failed ? 1 : 0);

@@ -16,7 +16,7 @@ fs.copyFileSync(path.join(root, 'mobile/bridge.js'), path.join(www, 'bridge.js')
 const index = path.join(www, 'index.html');
 let html = fs.readFileSync(index, 'utf8');
 // En Android la propia interfaz hace las peticiones de Comunidad y de actualizaciones.
-const connect = ['https://firestore.googleapis.com', 'https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com', 'https://api.github.com'];
+const connect = ['https://firestore.googleapis.com', 'https://identitytoolkit.googleapis.com', 'https://securetoken.googleapis.com', 'https://api.github.com', 'https://*.googleusercontent.com'];
 const csp = `default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ${connect.join(' ')};`;
 const replace = (from, to) => {
   if (!html.includes(from)) throw new Error(`No se encontró en index.html: ${from}`);

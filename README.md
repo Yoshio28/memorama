@@ -61,17 +61,40 @@ programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 **Android (7 o posterior):** descarga `Memomancer-<versión>.apk` desde la misma página
 de [Releases](https://github.com/Yoshio28/memorama/releases/latest) en el teléfono y
 ábrelo. La primera vez Android pedirá permiso para instalar apps desde el navegador o el
-gestor de archivos. Para pasar tus mazos entre el PC y el móvil usa *Ajustes →
-Exportar copia (JSON)* en uno y *Restaurar copia…* en el otro.
+gestor de archivos. Para tener los mismos mazos en el PC y en el móvil, inicia sesión con
+Google en *Perfil* en los dos (o usa *Ajustes → Exportar copia (JSON)* y *Restaurar copia…*).
 
 ## 100 % local
 
 Memomancer no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
-tiene bloqueada cualquier conexión de red. Solo hay dos excepciones, y las dos ocurren
+tiene bloqueada cualquier conexión de red. Solo hay tres excepciones, y las tres ocurren
 únicamente cuando las usas:
 
 - **Buscar actualizaciones**: consulta la última release de este repositorio en GitHub.
 - **Comunidad**: lista, descarga o publica mazos públicos (Firebase).
+- **Cuenta de Google** (opcional, en *Perfil*): si inicias sesión, tus datos se guardan
+  también en tu cuenta y se sincronizan entre tus dispositivos.
+
+## Perfil y cuenta de Google
+
+En **Perfil** eliges tu nombre y tu foto (se reduce a 256 px y se guarda con tus datos).
+El nombre aparece en la barra lateral y como autor al publicar en la Comunidad.
+
+Si inicias sesión con Google:
+
+- Tus mazos, tarjetas, progreso, modos de estudio y perfil se guardan comprimidos en tu
+  cuenta (Firestore, en una zona que solo puede leer y escribir tu cuenta).
+- Si pierdes o cambias de equipo o de teléfono, inicia sesión en el nuevo y lo recuperas
+  todo. Si usas Memomancer en varios dispositivos, se sincronizan solos: al abrir la app,
+  unos segundos después de cada cambio, al volver a ella y al cerrarla.
+- Si cambias cosas en dos dispositivos a la vez, se combinan (`src/sync.js`): lo que cambió
+  en un solo lado se respeta, también los borrados; si la misma tarjeta se estudió en los dos,
+  se queda el progreso con más repasos.
+- Los mazos que hubieras publicado en la Comunidad pasan a tu cuenta.
+- Cerrar sesión no borra nada: los datos se quedan en el dispositivo y en la cuenta.
+
+El inicio de sesión se hace en la página de Google del navegador; Memomancer nunca ve tu
+contraseña. Configuración: [`firebase/LEEME.md`](firebase/LEEME.md#cuenta-de-google-y-copia-en-la-nube).
 
 ## Comunidad
 
@@ -180,7 +203,10 @@ src/index.html     Interfaz
 src/app.js         Lógica de la interfaz (vistas, sesiones, importación)
 src/scheduler.js   Algoritmo de repetición espaciada (sin dependencias)
 src/styles.css     Estilos (tema claro y oscuro, y diseño para móvil)
-src/community-core.js  Lógica de la Comunidad común a escritorio y Android
+src/community-core.js  Comunidad, cuenta de Google y copia en la nube (común a escritorio y Android)
+src/sync.js        Fusión a tres bandas de los datos de dos dispositivos
+google-auth.js     Inicio de sesión con Google en escritorio (navegador + servidor local temporal)
+docs/auth/         Página puente del inicio de sesión (GitHub Pages)
 mobile/bridge.js   Capa nativa de Android (Capacitor): datos, archivos, Atrás, actualizaciones
 android/           Proyecto de Android (generado con Capacitor y ajustado: iconos, versión, firma)
 capacitor.config.json  Configuración de Capacitor

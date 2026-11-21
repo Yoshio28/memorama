@@ -5,6 +5,8 @@ rules_version = '2';
 // - Publicar requiere sesión (anónima vale); el mazo queda a nombre de esa sesión.
 // - Solo el dueño puede actualizar o retirar su mazo.
 // - Las denuncias solo se pueden crear; se revisan desde la consola de Firebase.
+// - La copia en la nube de cada usuario (users/{uid}/sync) solo la lee y escribe su dueño,
+//   y solo con sesión de Google (no anónima).
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -42,6 +44,28 @@ service cloud.firestore {
         && validDeck(request.resource.data);
 
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
+    }
+
+    function googleOwner(uid) {
+      return signedIn() && request.auth.uid == uid
+        && request.auth.token.firebase.sign_in_provider == 'google.com';
+    }
+
+    // Copia en la nube: meta (resumen) + c0…c9 (datos comprimidos, ~900 KB cada uno).
+    match /users/{uid}/sync/{doc} {
+      allow read, delete: if googleOwner(uid);
+      allow create, update: if googleOwner(uid) && (
+        (doc == 'meta'
+          && request.resource.data.keys().hasOnly(['chunks', 'size', 'device', 'appVersion', 'updatedAt'])
+          && request.resource.data.chunks is int && request.resource.data.chunks >= 1 && request.resource.data.chunks <= 10
+          && request.resource.data.size is int
+          && request.resource.data.device is string && request.resource.data.device.size() <= 40
+          && request.resource.data.appVersion is string && request.resource.data.appVersion.size() <= 20
+          && request.resource.data.updatedAt == request.time)
+        || (doc.matches('c[0-9]')
+          && request.resource.data.keys().hasOnly(['data'])
+          && request.resource.data.data is bytes && request.resource.data.data.size() <= 1000000)
+      );
     }
 
     match /reports/{reportId} {

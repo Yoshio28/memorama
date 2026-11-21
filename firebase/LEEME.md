@@ -30,6 +30,40 @@ app. La seguridad la dan las reglas de Firestore. Como medida extra, en Google C
 Console → *APIs y servicios* → *Credenciales* puedes restringir esa clave a
 *Identity Toolkit API*, *Token Service API* y *Cloud Firestore API*.
 
+## Cuenta de Google y copia en la nube
+
+En *Perfil*, cada usuario puede iniciar sesión con Google. Entonces sus mazos, tarjetas, progreso
+y perfil se guardan (comprimidos) en `users/{uid}/sync` y se sincronizan entre sus dispositivos.
+Si ya tenía mazos publicados con la sesión anónima, pasan a su cuenta.
+
+Cómo funciona el inicio de sesión (sin SDK de Firebase):
+
+1. La app abre en el navegador la página de Google (flujo OpenID Connect, `response_type=id_token`).
+2. Google vuelve a la **página puente** [`docs/auth/`](../docs/auth/index.html), publicada con GitHub
+   Pages en `https://yoshio28.github.io/memorama/auth/`. La página pasa el `id_token` a la app:
+   en escritorio, a un servidor local temporal (`127.0.0.1`); en Android, con el enlace
+   `app.memomancer://auth`.
+3. La app comprueba `state` y `nonce` y canjea el `id_token` en Firebase (`accounts:signInWithIdp`).
+
+### Configurarlo (una sola vez)
+
+1. **Firebase → Authentication → Método de acceso → Agregar proveedor nuevo → Google →
+   Habilitar**. Elige el correo de asistencia y pulsa *Guardar*. Vuelve a abrir Google y, en
+   *Configuración del SDK web*, copia el **ID de cliente web** (termina en
+   `.apps.googleusercontent.com`). Ponlo en `googleClientId` de
+   [`../firebase-config.json`](../firebase-config.json).
+2. **Google Cloud Console** (<https://console.cloud.google.com>, mismo proyecto) → *APIs y
+   servicios* → *Credenciales* → abre **Web client (auto created by Google Service)** → en
+   *URI de redireccionamiento autorizados* añade `https://yoshio28.github.io/memorama/auth/`
+   → *Guardar*.
+3. En Google Cloud → *Google Auth Platform* → *Público*: si el estado es **Prueba**, pulsa
+   **Publicar app** (con los permisos básicos de correo y perfil no requiere revisión). Si no,
+   solo podrían entrar los usuarios de prueba.
+4. **GitHub → Settings → Pages**: *Source* = *Deploy from a branch*, rama `main`, carpeta
+   `/docs` → *Save*.
+5. **Firestore → Reglas**: pega de nuevo [`firestore.rules`](firestore.rules) (incluye las
+   reglas de `users/`) y pulsa *Publicar*.
+
 ## Moderar
 
 En la consola de Firebase → Firestore → *Datos*:
@@ -60,4 +94,5 @@ npm run test:rules
 
 Arranca los emuladores de Authentication y Firestore y comprueba, con varias sesiones
 anónimas, que nadie puede publicar a nombre de otro, modificar o borrar mazos ajenos,
-saltarse los límites ni leer las denuncias.
+saltarse los límites ni leer las denuncias. La copia en la nube (`users/{uid}/sync`) solo la
+puede leer y escribir su dueño con sesión de Google.

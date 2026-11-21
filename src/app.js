@@ -17,7 +17,10 @@ let session = null;
 let saveTimer = null;
 let lastCreated = 0;
 let appVersion = '';
-const ui = { update: { status: 'idle' }, community: { tab: 'explore', status: 'idle', decks: [], q: '', error: '', configured: null }, collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
+let localRev = 0;      // sube con cada cambio local; sirve para saber si hay algo sin sincronizar
+let syncedRev = 0;     // localRev que ya está en la nube
+let syncState = null;  // { uid, updateTime, base }: la última copia sincronizada (base de la fusión)
+const ui = { account: { status: null, busy: false, error: '' }, sync: { state: 'idle', at: 0, error: '', device: '' }, update: { status: 'idle' }, community: { tab: 'explore', status: 'idle', decks: [], q: '', error: '', configured: null }, collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
 
 // ---------------------------------------------------------------- utilidades
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -45,6 +48,9 @@ function nextCreated() {
 }
 
 const ICON = {
+  google: '<svg viewBox="0 0 48 48" aria-hidden="true"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.6 5.4 2.7 13.3l7.9 6.2C12.5 13.6 17.8 9.5 24 9.5z"/><path fill="#4285F4" d="M46.1 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.4c-.5 2.9-2.2 5.3-4.6 6.9l7.4 5.8c4.3-4 6.9-9.9 6.9-17.2z"/><path fill="#FBBC05" d="M10.6 28.7c-.5-1.4-.8-3-.8-4.7s.3-3.2.8-4.7l-7.9-6.2C1 16.6 0 20.2 0 24s1 7.4 2.7 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.4-5.8c-2.1 1.4-4.8 2.3-8.5 2.3-6.2 0-11.5-4.1-13.4-9.8l-7.9 6.1C6.6 42.6 14.6 48 24 48z"/></svg>',
+  user: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>',
+  cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.5 19H7a5 5 0 1 1 1.2-9.86A6 6 0 0 1 19.5 11a4 4 0 0 1-2 8z"/></svg>',
   menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
@@ -73,11 +79,15 @@ function defaultPresets() {
   ];
 }
 
+// Solo se aceptan fotos de perfil incrustadas (data:) en formatos de imagen normales.
+const PHOTO_RE = /^data:image\/(png|jpeg|webp|gif);base64,[A-Za-z0-9+/=]+$/;
+
 function emptyDb() {
   return {
     version: 1,
     settings: { scheduler: { ...S.DEFAULTS }, defaultNewPerDay: 20, defaultReviewsPerDay: 200, theme: 'system', legacySamplesChecked: true, authorName: '' },
     decks: [], cards: [], presets: defaultPresets(), log: [], published: {},
+    profile: { name: '', photo: '' },
   };
 }
 
@@ -144,6 +154,8 @@ function migrate(d) {
   d.presets = Array.isArray(d.presets) ? d.presets : [];
   d.log = Array.isArray(d.log) ? d.log : [];
   d.published = d.published && typeof d.published === 'object' ? d.published : {};
+  d.profile = Object.assign({ name: '', photo: '' }, d.profile && typeof d.profile === 'object' ? d.profile : {});
+  if (!PHOTO_RE.test(d.profile.photo || '')) d.profile.photo = '';
   for (const deck of d.decks) {
     deck.sections = Array.isArray(deck.sections) ? deck.sections : [];
     deck.newPerDay ??= d.settings.defaultNewPerDay;
@@ -167,6 +179,8 @@ function migrate(d) {
 function persist() {
   clearTimeout(saveTimer);
   saveTimer = setTimeout(flush, 250);
+  localRev++;
+  scheduleSync(8000);
 }
 function flush() {
   clearTimeout(saveTimer);
@@ -373,7 +387,8 @@ function handleBack() {
 
 function renderTopbar() {
   $('#topbar').innerHTML = `<button class="icon-btn menu-btn" data-act="drawer" aria-label="Abrir menú">${ICON.menu}</button>
-    <div class="brand"><img class="logo" src="icon.svg" alt="">Memomancer</div>`;
+    <div class="brand"><img class="logo" src="icon.svg" alt="">Memomancer</div>
+    <button class="top-avatar" data-act="nav" data-view="profile" aria-label="Perfil">${avatarHtml(34)}</button>`;
 }
 
 function render() {
@@ -388,7 +403,7 @@ function render() {
     renderSidebar();
     renderTopbar();
   }
-  const fn = { home: renderHome, deck: renderDeck, add: renderAdd, browse: renderBrowse, community: renderCommunity, stats: renderStats, settings: renderSettings, study: renderStudy }[view.name];
+  const fn = { home: renderHome, deck: renderDeck, add: renderAdd, browse: renderBrowse, community: renderCommunity, stats: renderStats, settings: renderSettings, study: renderStudy, profile: renderProfile }[view.name];
   fn();
 }
 
@@ -412,6 +427,7 @@ function renderSidebar() {
   }).join('');
   $('#sidebar').innerHTML = `
     <div class="brand"><img class="logo" src="icon.svg" alt="">Memomancer</div>
+    ${meRowHtml()}
     <nav class="nav">${navBtn('home', 'Inicio')}${navBtn('add', 'Añadir tarjetas')}${navBtn('browse', 'Explorar')}${navBtn('community', 'Comunidad')}${navBtn('stats', 'Estadísticas')}${navBtn('settings', 'Ajustes')}</nav>
     <div class="side-title"><span>Mazos y secciones</span><button class="icon-btn" data-act="new-deck" title="Nuevo mazo" aria-label="Nuevo mazo">${ICON.add}</button></div>
     <ul class="deck-tree">${decks || '<li class="muted small" style="padding:8px">Aún no hay mazos</li>'}</ul>
@@ -1018,7 +1034,7 @@ async function publishDeckModal(deck) {
     ${pub ? `<p class="hint" style="margin-top:0">Este mazo ya está publicado (${pub.at ? 'última vez el ' + fmtDate(pub.at) : ''}). Al actualizar, la copia pública se sustituye por el contenido actual.</p>` : ''}
     <div class="field"><label for="pb-title">Título</label><input class="input" id="pb-title" maxlength="80" value="${esc(deck.name)}"></div>
     <div class="field"><label for="pb-desc">Descripción (opcional)</label><textarea class="input" id="pb-desc" maxlength="500" placeholder="¿De qué trata? ¿Para qué examen o nivel sirve?">${esc(deck.publicDescription || '')}</textarea></div>
-    <div class="field"><label for="pb-author">Tu nombre o apodo</label><input class="input" id="pb-author" maxlength="40" placeholder="Anónimo" value="${esc(db.settings.authorName || '')}"></div>
+    <div class="field"><label for="pb-author">Tu nombre o apodo</label><input class="input" id="pb-author" maxlength="40" placeholder="Anónimo" value="${esc(db.settings.authorName || db.profile.name || '')}"></div>
     <div class="info-grid" style="grid-template-columns:1fr 1fr"><div>Se publicará<b>${plural(cards.length, 'tarjeta', 'tarjetas')} · ${plural(secCount, 'sección', 'secciones')}</b></div><div>No se publica<b>tu progreso ni tus estadísticas</b></div></div>
     <p class="hint">Cualquier persona podrá ver y descargar este mazo. Publica solo contenido propio o que tengas permiso para compartir.</p>
     </div><div class="modal-foot">${pub ? '<button type="button" class="btn danger" id="pb-remove">Retirar</button>' : ''}<span class="small muted" id="pb-msg"></span><span class="spacer"></span>
@@ -1065,7 +1081,9 @@ async function publishDeckModal(deck) {
 
 // ---------------------------------------------------------------- Actualizaciones
 const mb = (bytes) => (bytes / 1048576).toFixed(1).replace('.', ',');
-const ipcError = (err) => String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');
+const ipcError = (err) => String(err?.message || err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '').replace(/^\[[A-Z_]+\] /, '');
+/** Código del error (CONFLICT, SIGNED_OUT, CANCELLED…), venga de Android o de Electron. */
+const errCode = (err) => err?.code || (/\[([A-Z_]+)\] /.exec(String(err?.message || '')) || [])[1] || '';
 
 /** Novedades de la versión más reciente (primer bloque «## …» de las notas de la release). */
 function releaseNotesHtml(md) {
@@ -1896,6 +1914,293 @@ async function importJson() {
   go({ name: 'home' });
 }
 
+// ---------------------------------------------------------------- Perfil y cuenta
+function avatarHtml(size = 32) {
+  const p = db.profile || {};
+  if (p.photo && PHOTO_RE.test(p.photo)) return `<img class="avatar" style="width:${size}px;height:${size}px" src="${p.photo}" alt="">`;
+  const letter = (p.name || '').trim().charAt(0).toUpperCase();
+  return `<span class="avatar ph" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.44)}px" aria-hidden="true">${letter ? esc(letter) : ICON.user}</span>`;
+}
+
+function ago(ts) {
+  const s = Math.max(0, (Date.now() - ts) / 1000);
+  if (s < 50) return 'ahora mismo';
+  if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+  if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+  return 'el ' + fmtDate(ts);
+}
+
+const signedIn = () => !!ui.account.status?.signedIn;
+
+function syncShort() {
+  if (!signedIn()) return 'Sin cuenta · solo en este equipo';
+  const st = ui.sync.state;
+  if (st === 'syncing') return 'Sincronizando…';
+  if (st === 'error') return '⚠ Sin sincronizar';
+  if (localRev !== syncedRev) return 'Cambios por subir';
+  if (st === 'ok') return '☁ Guardado en tu cuenta';
+  return '☁ Cuenta de Google';
+}
+
+function meRowHtml() {
+  return `<button class="me ${view.name === 'profile' ? 'active' : ''}" data-act="nav" data-view="profile">${avatarHtml(32)}
+    <span class="me-text"><b>${esc(db.profile.name || 'Tu perfil')}</b><span class="small muted">${esc(syncShort())}</span></span></button>`;
+}
+
+function accountPanelHtml() {
+  const st = ui.account.status;
+  const err = ui.account.error ? `<p class="upd-line bad" style="margin:0 0 12px">${esc(ui.account.error)}</p>` : '';
+  const device = isAndroid ? 'teléfono' : 'equipo';
+  if (!st) return '<p class="upd-line"><span class="spinner"></span>Cargando…</p>';
+  if (!st.available) return `<h2 style="margin-bottom:4px">Cuenta de Google</h2><p class="hint" style="margin:0">El inicio de sesión con Google no está disponible en esta versión.</p>`;
+  if (ui.account.busy) {
+    return `<h2 style="margin-bottom:8px">Cuenta de Google</h2>
+      <p class="upd-line"><span class="spinner"></span>Completa el inicio de sesión en ${isAndroid ? 'la página de Google' : 'tu navegador'}. Cuando termines volverás aquí.</p>
+      <div class="row" style="margin-top:14px"><button class="btn" data-act="acct-cancel">Cancelar</button></div>`;
+  }
+  if (!st.signedIn) {
+    return `<h2 style="margin-bottom:4px">Cuenta de Google</h2>
+      <p class="hint" style="margin:0 0 14px">Inicia sesión para guardar tus mazos, tarjetas y progreso en tu cuenta. Si pierdes o cambias de ${device}, inicia sesión en el nuevo y lo recuperas todo. Si usas Memomancer en el PC y en el móvil, se mantienen sincronizados.</p>
+      ${err}<button class="btn google" data-act="acct-google">${ICON.google}Iniciar sesión con Google</button>
+      <p class="hint" style="margin:12px 0 0">Tus mazos publicados en la Comunidad pasan también a tu cuenta.</p>`;
+  }
+  const s = ui.sync;
+  let line;
+  if (s.state === 'syncing') line = '<p class="upd-line"><span class="spinner"></span>Sincronizando…</p>';
+  else if (s.state === 'error') line = `<p class="upd-line bad">No se pudo sincronizar: ${esc(s.error)}</p>`;
+  else if (s.state === 'ok') line = `<p class="upd-line ok">✓ Tus datos están guardados en tu cuenta · ${esc(ago(s.at))}${localRev !== syncedRev ? ' (hay cambios nuevos por subir)' : ''}</p>`;
+  else line = '<p class="upd-line">Pendiente de sincronizar.</p>';
+  return `<div class="row" style="justify-content:space-between;margin-bottom:8px"><h2>Cuenta de Google</h2></div>
+    <div class="acct"><div><b>${esc(st.name || db.profile.name || 'Tu cuenta')}</b><div class="small muted">${esc(st.email)}</div></div></div>
+    ${err}${line}
+    <div class="row" style="margin-top:14px"><button class="btn" data-act="sync-now" ${s.state === 'syncing' ? 'disabled' : ''}>${ICON.cloud}Sincronizar ahora</button>
+      <button class="btn ghost" data-act="acct-signout">Cerrar sesión</button></div>
+    <p class="hint" style="margin:12px 0 0">Se sincroniza sola: al abrir la app, unos segundos después de cada cambio y al volver a ella. Si cambias algo en dos dispositivos a la vez, los cambios se combinan.</p>`;
+}
+
+function renderAccountPanel() {
+  const el = $('#acct-panel');
+  if (el) el.innerHTML = accountPanelHtml();
+  if (view.name !== 'study') { renderSidebar(); renderTopbar(); }
+}
+
+function renderProfile() {
+  const p = db.profile;
+  const st = ui.account.status;
+  $('#main').innerHTML = `<div class="page" style="max-width:780px">
+    <div class="page-head"><div><h1>Perfil</h1><div class="sub">Tu nombre y tu foto, y tu cuenta de Google para no perder tus mazos.</div></div></div>
+    <div class="panel pad profile">
+      <div class="profile-photo">${avatarHtml(104)}</div>
+      <div class="profile-main">
+        <div class="field"><label for="pf-name">Nombre</label><input class="input" id="pf-name" maxlength="40" placeholder="¿Cómo te llamas?" value="${esc(p.name)}">
+          <span class="hint">Aparece en la barra lateral y como autor al publicar en la Comunidad.</span></div>
+        <div class="row"><button class="btn" data-act="pf-photo">Cambiar foto…</button>
+          ${st?.signedIn && st.photoUrl ? '<button class="btn ghost" data-act="pf-photo-google">Usar la de Google</button>' : ''}
+          ${p.photo ? '<button class="btn ghost danger" data-act="pf-photo-remove">Quitar foto</button>' : ''}</div>
+      </div>
+    </div>
+    <div class="panel pad" id="acct-panel" style="margin-top:16px">${accountPanelHtml()}</div>
+  </div>`;
+  $('#pf-name').oninput = (e) => {
+    db.profile.name = e.target.value.trim().slice(0, 40);
+    persist();
+    renderSidebar();
+    renderTopbar();
+    $('.profile-photo').innerHTML = avatarHtml(104);
+  };
+}
+
+/** Abre el selector de imágenes y devuelve la imagen como data: URL (o null). */
+function pickImage() {
+  return new Promise((resolve) => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    input.style.display = 'none';
+    let done = false;
+    const finish = (v) => { if (done) return; done = true; input.remove(); resolve(v); };
+    input.addEventListener('change', () => {
+      const f = input.files && input.files[0];
+      if (!f) return finish(null);
+      const r = new FileReader();
+      r.onload = () => finish(String(r.result));
+      r.onerror = () => finish(null);
+      r.readAsDataURL(f);
+    });
+    input.addEventListener('cancel', () => finish(null));
+    document.body.appendChild(input);
+    input.click();
+  });
+}
+
+/** Recorta al centro y reduce a size×size en JPEG (~20-40 KB). */
+function resizeImage(dataUrl, size = 256) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas');
+      c.width = size; c.height = size;
+      const ctx = c.getContext('2d');
+      ctx.fillStyle = '#fff';
+      ctx.fillRect(0, 0, size, size);
+      const side = Math.min(img.naturalWidth, img.naturalHeight);
+      ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, size, size);
+      resolve(c.toDataURL('image/jpeg', 0.85));
+    };
+    img.onerror = () => reject(new Error('No se pudo leer esa imagen. Prueba con una foto JPG o PNG.'));
+    img.src = dataUrl;
+  });
+}
+
+async function setPhoto(dataUrl) {
+  if (!dataUrl) return;
+  try {
+    db.profile.photo = await resizeImage(dataUrl);
+    persist();
+    render();
+    toast('Foto de perfil actualizada');
+  } catch (err) { toast(err.message); }
+}
+
+async function googleSignIn() {
+  ui.account.busy = true;
+  ui.account.error = '';
+  renderAccountPanel();
+  try {
+    const r = await api.account.signInWithGoogle();
+    // Mazos publicados con la sesión anónima de este equipo que se movieron a la cuenta.
+    for (const pub of Object.values(db.published)) if (pub && r.idMap && r.idMap[pub.id]) pub.id = r.idMap[pub.id];
+    if (!db.profile.name && r.name) db.profile.name = r.name.slice(0, 40);
+    if (!db.profile.photo && r.photoUrl) {
+      const photo = await api.account.googlePhoto(r.photoUrl).catch(() => null);
+      if (photo) db.profile.photo = await resizeImage(photo).catch(() => '');
+    }
+    persist();
+    await flush();
+    ui.account.status = await api.account.status();
+    if (syncState && syncState.uid !== r.uid) syncState = null; // otra cuenta: se empieza de cero
+    ui.account.busy = false;
+    renderAccountPanel();
+    if (view.name === 'profile') render();
+    toast(`Sesión iniciada como ${r.email || r.name || 'tu cuenta de Google'}`);
+    const before = { decks: db.decks.length, cards: db.cards.length };
+    await syncNow();
+    const got = db.cards.length - before.cards;
+    if (got > 0) toast(`Se han traído ${plural(db.decks.length - before.decks, 'mazo', 'mazos')} y ${plural(got, 'tarjeta', 'tarjetas')} de tu cuenta`);
+  } catch (err) {
+    ui.account.busy = false;
+    ui.account.error = errCode(err) === 'CANCELLED' ? '' : ipcError(err);
+    renderAccountPanel();
+    if (errCode(err) === 'CANCELLED') toast('Inicio de sesión cancelado');
+  }
+}
+
+async function googleSignOut() {
+  const ok = await confirmBox({
+    title: 'Cerrar sesión',
+    message: `Tus mazos se quedan en este ${isAndroid ? 'teléfono' : 'equipo'} y también en tu cuenta, pero dejarán de sincronizarse hasta que vuelvas a iniciar sesión.`,
+    okText: 'Cerrar sesión',
+  });
+  if (!ok) return;
+  if (signedIn() && localRev !== syncedRev) await syncNow();
+  await api.account.signOut();
+  syncState = null;
+  await api.aux.write('sync-state.json', null).catch(() => {});
+  ui.account.status = await api.account.status();
+  ui.sync = { state: 'idle', at: 0, error: '', device: '' };
+  render();
+  toast('Sesión cerrada');
+}
+
+// ---------------------------------------------------------------- Sincronización con la cuenta
+let syncTimer = null;
+let syncing = null;     // promesa de la sincronización en curso
+let syncAgain = false;
+let lastPull = 0;
+
+function scheduleSync(ms) {
+  if (!signedIn()) return;
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => syncNow(), ms);
+}
+
+function setSync(patch) {
+  Object.assign(ui.sync, patch);
+  renderAccountPanel();
+}
+
+/**
+ * Descarga la copia de la nube, la combina con lo de este dispositivo (Sync.merge3) y sube el
+ * resultado. Si otro dispositivo sube a la vez, se repite. No toca los datos mientras se estudia
+ * o hay un diálogo abierto: lo deja para después.
+ */
+function syncNow() {
+  if (!signedIn()) return Promise.resolve();
+  if (syncing) { syncAgain = true; return syncing; }
+  clearTimeout(syncTimer);
+  syncing = (async () => {
+    setSync({ state: 'syncing' });
+    try {
+      const uidNow = ui.account.status.uid;
+      for (let attempt = 0; attempt < 4; attempt++) {
+        if (view.name === 'study' || modalOpen()) { setSync({ state: ui.sync.at ? 'ok' : 'idle' }); scheduleSync(15000); return; }
+        await flush();
+        const st = syncState && syncState.uid === uidNow ? syncState : null;
+        const remote = await api.cloud.pull(st ? st.updateTime : null);
+        lastPull = Date.now();
+        let base = st ? st.base : null;
+        let remoteDb = null;
+        let updateTime = null;
+        if (remote.unchanged) { remoteDb = base; updateTime = st.updateTime; }
+        else if (!remote.empty) { remoteDb = migrate(JSON.parse(remote.json)); updateTime = remote.updateTime; }
+        else base = null; // la nube está vacía: se sube lo de aquí
+        const revAtSnapshot = localRev;
+        const local = JSON.parse(JSON.stringify(db));
+        const merged = remoteDb ? Sync.merge3(base, local, remoteDb) : local;
+        if (!Sync.same(merged, local)) {
+          if (view.name === 'study' || modalOpen()) continue;
+          db = migrate(JSON.parse(JSON.stringify(merged))); // copia: la base no debe cambiar al editar
+          applyTheme();
+          clearTimeout(saveTimer);
+          await api.save(JSON.stringify(db));
+          render();
+        }
+        if (!remoteDb || !Sync.same(merged, remoteDb)) {
+          try {
+            const r = await api.cloud.push(JSON.stringify(merged), updateTime);
+            updateTime = r.updateTime;
+          } catch (err) {
+            if (errCode(err) === 'CONFLICT') continue; // otro dispositivo subió antes: otra vuelta
+            throw err;
+          }
+        }
+        syncState = { uid: uidNow, updateTime, base: JSON.parse(JSON.stringify(merged)) };
+        await api.aux.write('sync-state.json', JSON.stringify(syncState));
+        // Si hubo cambios locales mientras tanto, quedan pendientes para la siguiente vuelta.
+        syncedRev = localRev === revAtSnapshot ? localRev : syncedRev;
+        if (localRev !== syncedRev) syncAgain = true;
+        setSync({ state: 'ok', at: Date.now(), error: '', device: remote.device || ui.sync.device });
+        return;
+      }
+      throw new Error('Hay demasiados cambios a la vez en otros dispositivos. Se volverá a intentar en un momento.');
+    } catch (err) {
+      const code = errCode(err);
+      if (code === 'SIGNED_OUT') ui.account.status = await api.account.status().catch(() => ui.account.status);
+      setSync({ state: 'error', error: ipcError(err) });
+      scheduleSync(60000);
+    } finally {
+      syncing = null;
+      if (syncAgain) { syncAgain = false; scheduleSync(1500); }
+    }
+  })();
+  return syncing;
+}
+
+/** Al volver a la app (o a la ventana): sincroniza si hace un rato que no lo hacía. */
+function syncIfStale() {
+  if (signedIn() && Date.now() - lastPull > 45000) syncNow();
+}
+
 // ---------------------------------------------------------------- Eventos
 async function newDeck() {
   const name = await ask({ title: 'Nuevo mazo', label: 'Nombre del mazo', okText: 'Crear' });
@@ -1992,6 +2297,16 @@ const actions = {
   },
   'install-update': installUpdate,
   'open-release': () => api.openReleasePage(),
+  'acct-google': googleSignIn,
+  'acct-cancel': () => api.account.cancel(),
+  'acct-signout': googleSignOut,
+  'sync-now': () => syncNow(),
+  'pf-photo': async () => setPhoto(await pickImage()),
+  'pf-photo-google': async () => {
+    const photo = await api.account.googlePhoto(ui.account.status?.photoUrl).catch(() => null);
+    if (photo) setPhoto(photo); else toast('No se pudo descargar la foto de Google');
+  },
+  'pf-photo-remove': () => { db.profile.photo = ''; persist(); render(); },
 };
 
 document.addEventListener('click', (e) => {
@@ -2103,6 +2418,34 @@ function toast(msg) {
   }
   applyTheme();
   render();
+  // Cuenta de Google y sincronización
+  try {
+    const raw2 = await api.aux.read('sync-state.json');
+    syncState = raw2 ? JSON.parse(raw2) : null;
+  } catch { syncState = null; }
+  try { ui.account.status = await api.account.status(); } catch { ui.account.status = { available: false, signedIn: false }; }
+  if (syncState && syncState.uid !== ui.account.status.uid) syncState = null;
+  if (signedIn()) {
+    // ¿Hay cambios locales que no llegaron a la nube (p. ej. se cerró la app sin conexión)?
+    syncedRev = syncState && Sync.same(syncState.base, db) ? localRev : -1;
+    syncNow();
+  }
+  if (view.name !== 'study') { renderSidebar(); renderTopbar(); }
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') syncIfStale();
+    else if (signedIn() && localRev !== syncedRev) { flush(); syncNow(); }
+  });
+  window.addEventListener('focus', syncIfStale);
+  setInterval(() => { if (signedIn() && document.visibilityState === 'visible') syncNow(); }, 5 * 60000);
+  // Escritorio: antes de cerrar la ventana se guarda y se suben los cambios pendientes (máx. 6 s).
+  if (api.onBeforeClose) {
+    api.onBeforeClose(async () => {
+      try {
+        await flush();
+        if (signedIn() && localRev !== syncedRev) await Promise.race([syncNow(), new Promise((r) => setTimeout(r, 6000))]);
+      } finally { api.closeReady(); }
+    });
+  }
   // Refresca los recuentos cada minuto (las tarjetas en aprendizaje vencen con el tiempo).
   setInterval(() => { if (view.name !== 'study' && view.name !== 'community' && !modalOpen() && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) render(); }, 60000);
 })();

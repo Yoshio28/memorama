@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const updater = require('./updater');
 const community = require('./community');
+const googleAuth = require('./google-auth');
 
 // Los datos siguen en la carpeta «memora» de siempre (%APPDATA%\memora en Windows) aunque la app
 // ahora se llame Memomancer: así quien actualiza conserva sus tarjetas sin migrar nada.
@@ -103,6 +104,33 @@ ipcMain.handle('community:publish', (_e, deck, remoteId) => community.publish(de
 ipcMain.handle('community:remove', (_e, id) => community.remove(String(id)));
 ipcMain.handle('community:report', (_e, id, reason) => community.report(String(id), String(reason || '')));
 
+// Cuenta de Google y copia en la nube (solo se conecta si el usuario inicia sesión)
+// Electron solo pasa el mensaje de los errores: el código (CONFLICT, SIGNED_OUT…) va delante.
+const coded = (fn) => async (...args) => {
+  try { return await fn(...args); } catch (e) { throw new Error(e.code ? `[${e.code}] ${e.message}` : e.message); }
+};
+const DEVICE = { win32: 'Windows', darwin: 'Mac', linux: 'Linux' }[process.platform] || 'PC';
+ipcMain.handle('account:status', () => community.account.status());
+ipcMain.handle('account:google', coded((e) => googleAuth.signIn(community, BrowserWindow.fromWebContents(e.sender))));
+ipcMain.handle('account:cancel', () => googleAuth.cancel());
+ipcMain.handle('account:signOut', () => community.account.signOut());
+ipcMain.handle('account:photo', (_e, url) => community.account.googlePhoto(String(url || '')).catch(() => null));
+ipcMain.handle('cloud:pull', coded((_e, known) => community.cloud.pull(known ? String(known) : null)));
+ipcMain.handle('cloud:push', coded((_e, json, expected) => community.cloud.push(String(json), expected ? String(expected) : null, DEVICE)));
+
+// Archivos auxiliares pequeños junto a los datos (p. ej. el estado de la sincronización)
+const AUX = new Set(['sync-state.json']);
+ipcMain.handle('aux:read', (_e, name) => {
+  if (!AUX.has(name)) throw new Error('Archivo no permitido');
+  try { return fs.readFileSync(path.join(dataDir(), name), 'utf8'); } catch { return null; }
+});
+ipcMain.handle('aux:write', (_e, name, text) => {
+  if (!AUX.has(name)) throw new Error('Archivo no permitido');
+  if (text === null) { fs.rmSync(path.join(dataDir(), name), { force: true }); return true; }
+  atomicWrite(path.join(dataDir(), name), String(text));
+  return true;
+});
+
 function createWindow() {
   const win = new BrowserWindow({
     width: 1240,
@@ -123,7 +151,20 @@ function createWindow() {
   win.webContents.on('will-navigate', (ev) => ev.preventDefault());
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   win.loadFile(path.join(__dirname, 'src', 'index.html'));
+  // Antes de cerrar, la interfaz guarda y sube a la cuenta lo pendiente (como mucho unos segundos).
+  let closing = false;
+  win.on('close', (ev) => {
+    if (closing || win.webContents.isDestroyed() || win.webContents.isCrashed()) return;
+    ev.preventDefault();
+    closing = true;
+    const done = () => { if (!win.isDestroyed()) win.destroy(); };
+    ipcMain.once(`app:close-ready:${win.webContents.id}`, done);
+    setTimeout(done, 8000);
+    win.webContents.send('app:before-close');
+  });
 }
+
+ipcMain.on('app:close-ready', (e) => ipcMain.emit(`app:close-ready:${e.sender.id}`));
 
 app.whenReady().then(() => {
   // Aplicación 100 % local: se bloquea cualquier petición que no sea a archivos de la propia app.

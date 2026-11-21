@@ -18,6 +18,23 @@ contextBridge.exposeInMainWorld('memora', {
     remove: (id) => ipcRenderer.invoke('community:remove', id),
     report: (id, reason) => ipcRenderer.invoke('community:report', id, reason),
   },
+  account: {
+    status: () => ipcRenderer.invoke('account:status'),
+    signInWithGoogle: () => ipcRenderer.invoke('account:google'),
+    cancel: () => ipcRenderer.invoke('account:cancel'),
+    signOut: () => ipcRenderer.invoke('account:signOut'),
+    googlePhoto: (url) => ipcRenderer.invoke('account:photo', url),
+  },
+  cloud: {
+    pull: (known) => ipcRenderer.invoke('cloud:pull', known),
+    push: (json, expected) => ipcRenderer.invoke('cloud:push', json, expected),
+  },
+  aux: {
+    read: (name) => ipcRenderer.invoke('aux:read', name),
+    write: (name, text) => ipcRenderer.invoke('aux:write', name, text),
+  },
+  onBeforeClose: (cb) => ipcRenderer.on('app:before-close', () => cb()),
+  closeReady: () => ipcRenderer.send('app:close-ready'),
   checkUpdate: () => ipcRenderer.invoke('update:check'),
   installUpdate: () => ipcRenderer.invoke('update:install'),
   openReleasePage: () => ipcRenderer.invoke('update:openPage'),

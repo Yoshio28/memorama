@@ -21,6 +21,37 @@
   const LIST_FIELDS = ['title', 'description', 'authorName', 'ownerUid', 'cardCount', 'sectionNames', 'createdAt', 'updatedAt'];
   const LIMITS = { title: 80, description: 500, authorName: 40, cards: 2000, sections: 50, field: 4000, bytes: 900 * 1024 };
   const ID_RE = /^[A-Za-z0-9_-]{1,40}$/;
+  const SYNC_CHUNK = 900 * 1024;  // bytes por documento (Firestore admite ~1 MB)
+  const SYNC_MAX_CHUNKS = 10;      // ~9 MB comprimidos como máximo
+  const GOOGLE_PHOTO_RE = /^https:\/\/lh\d\.googleusercontent\.com\//;
+
+  // ---------------------------------------------------------------- binario, base64 y gzip
+  function toBase64(bytes) {
+    let s = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(s);
+  }
+  function fromBase64(b64) {
+    const s = atob(b64);
+    const out = new Uint8Array(s.length);
+    for (let i = 0; i < s.length; i++) out[i] = s.charCodeAt(i);
+    return out;
+  }
+  async function gzip(text) {
+    const stream = new Blob([text]).stream().pipeThrough(new CompressionStream('gzip'));
+    return new Uint8Array(await new Response(stream).arrayBuffer());
+  }
+  async function gunzip(bytes) {
+    const stream = new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    return new Response(stream).text();
+  }
+  /** Contenido (sin verificar) de un JWT: lo usamos solo para comprobar el nonce. */
+  function jwtPayload(jwt) {
+    try {
+      const part = String(jwt).split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+      return JSON.parse(new TextDecoder().decode(fromBase64(part + '='.repeat((4 - (part.length % 4)) % 4))));
+    } catch { return null; }
+  }
 
   function friendly(http, status, message) {
     if (http === 403 || status === 'PERMISSION_DENIED') return 'La comunidad rechazó la operación (no tienes permiso o los datos no son válidos).';
@@ -28,6 +59,8 @@
     if (http === 429 || status === 'RESOURCE_EXHAUSTED') return 'La comunidad ha alcanzado su límite de uso por hoy. Inténtalo más tarde.';
     if (/ADMIN_ONLY_OPERATION|OPERATION_NOT_ALLOWED|CONFIGURATION_NOT_FOUND/.test(message)) return 'El inicio de sesión anónimo no está activado en el proyecto de Firebase.';
     if (/API key not valid|API_KEY_INVALID/.test(message)) return 'La clave de Firebase no es válida (revisa firebase-config.json).';
+    if (/INVALID_IDP_RESPONSE|INVALID_ID_TOKEN/.test(message)) return 'Google no aceptó el inicio de sesión. Inténtalo de nuevo.';
+    if (/USER_DISABLED/.test(message)) return 'Esta cuenta está desactivada.';
     return `Error de la comunidad (${http}${status ? ' ' + status : ''})${message ? ': ' + message : ''}`;
   }
 
@@ -111,7 +144,7 @@
 
     async function config() {
       const c = (await platform.config()) || {};
-      return { apiKey: c.apiKey || '', projectId: c.projectId || '', emulator: c.emulator || '' };
+      return { apiKey: c.apiKey || '', projectId: c.projectId || '', emulator: c.emulator || '', googleClientId: c.googleClientId || '', authRelay: c.authRelay || '' };
     }
 
     async function urls() {
@@ -122,6 +155,7 @@
       const db = `projects/${projectId}/databases/(default)/documents`;
       return {
         signUp: `${auth}/accounts:signUp?key=${encodeURIComponent(apiKey)}`,
+        signInWithIdp: `${auth}/accounts:signInWithIdp?key=${encodeURIComponent(apiKey)}`,
         refresh: `${secure}/token?key=${encodeURIComponent(apiKey)}`,
         dbName: db,
         docs: `${fsBase}/${db}`,
@@ -149,13 +183,14 @@
       const err = new Error(friendly(res.status, status, message));
       err.status = res.status;
       err.code = status || message;
+      err.raw = message;
       throw err;
     }
 
     // -------------------------------------------------------------- sesión anónima
     async function signUp() {
       const r = await call('POST', (await urls()).signUp, { body: { returnSecureToken: true } });
-      await writeAuth({ uid: r.localId, refreshToken: r.refreshToken });
+      await writeAuth({ uid: r.localId, refreshToken: r.refreshToken, provider: 'anonymous' });
       token = { idToken: r.idToken, expiresAt: Date.now() + (Number(r.expiresIn) || 3600) * 1000 };
       return r.localId;
     }
@@ -167,11 +202,18 @@
       if (!saved?.refreshToken) { await signUp(); return token.idToken; }
       try {
         const r = await call('POST', (await urls()).refresh, { form: { grant_type: 'refresh_token', refresh_token: saved.refreshToken } });
-        await writeAuth({ uid: r.user_id || saved.uid, refreshToken: r.refresh_token || saved.refreshToken });
+        await writeAuth({ ...saved, uid: r.user_id || saved.uid, refreshToken: r.refresh_token || saved.refreshToken });
         token = { idToken: r.id_token, expiresAt: Date.now() + (Number(r.expires_in) || 3600) * 1000 };
         return token.idToken;
       } catch (err) {
         // La sesión guardada ya no es válida (usuario borrado o token revocado): se empieza otra.
+        // Con Google no se crea otra en silencio: hay que volver a iniciar sesión.
+        if (err.status === 400 && saved.provider === 'google.com') {
+          await writeAuth(null);
+          const e = new Error('Tu sesión de Google ha caducado. Vuelve a iniciar sesión en Perfil.');
+          e.code = 'SIGNED_OUT';
+          throw e;
+        }
         if (err.status === 400) { await signUp(); return token.idToken; }
         throw err;
       }
@@ -271,8 +313,194 @@
       return { ok: true };
     }
 
-    return { status, list, get, publish, remove, report };
+    // -------------------------------------------------------------- cuenta de Google
+    async function accountStatus() {
+      const c = await config();
+      const a = await readAuth();
+      const google = a?.provider === 'google.com';
+      return {
+        available: !!(c.apiKey && c.projectId && c.googleClientId && c.authRelay),
+        signedIn: google,
+        uid: google ? a.uid : null,
+        email: google ? a.email || '' : '',
+        name: google ? a.name || '' : '',
+        photoUrl: google ? a.photoUrl || '' : '',
+      };
+    }
+
+    /** Dirección de la página de Google para iniciar sesión (flujo OpenID Connect implícito). */
+    async function googleAuthUrl({ nonce, state }) {
+      const c = await config();
+      if (!c.googleClientId || !c.authRelay) throw new Error('El inicio de sesión con Google no está configurado en esta versión.');
+      return 'https://accounts.google.com/o/oauth2/v2/auth?' + new URLSearchParams({
+        client_id: c.googleClientId, redirect_uri: c.authRelay, response_type: 'id_token',
+        scope: 'openid email profile', nonce, state, prompt: 'select_account',
+      });
+    }
+
+    /** Copia a la cuenta nueva los mazos publicados con la sesión anónima y retira los antiguos. */
+    async function migrateDecks(anon, newUid, newTok) {
+      const u = await urls();
+      const res = await call('POST', `${u.docs}:runQuery`, { body: { structuredQuery: {
+        from: [{ collectionId: 'decks' }],
+        where: { fieldFilter: { field: { fieldPath: 'ownerUid' }, op: 'EQUAL', value: { stringValue: anon.uid } } },
+        limit: 500,
+      } } });
+      const idMap = {};
+      for (const r of (res || []).filter((x) => x.document)) {
+        const oldId = docId(r.document.name);
+        const d = fromFields(r.document.fields);
+        const keep = ['title', 'description', 'authorName', 'cards', 'cardCount', 'sectionNames', 'appVersion'];
+        const data = Object.fromEntries(keep.map((k) => [k, d[k]]));
+        const id = newId();
+        await call('POST', `${u.docs}:commit`, { idToken: newTok, body: { writes: [{
+          update: { name: `${u.dbName}/decks/${id}`, fields: toFields({ ...data, ownerUid: newUid }) },
+          updateTransforms: [{ fieldPath: 'createdAt', setToServerValue: 'REQUEST_TIME' }, { fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
+          currentDocument: { exists: false },
+        }] } });
+        await call('DELETE', `${u.docs}/decks/${oldId}`, { idToken: anon.token }).catch(() => {});
+        idMap[oldId] = id;
+      }
+      return idMap;
+    }
+
+    /**
+     * Inicia sesión con el id_token que devuelve Google. Si este equipo tenía una sesión anónima
+     * (mazos publicados), se vincula a la cuenta de Google y conserva su identificador; si esa
+     * cuenta ya existía (otro dispositivo), los mazos publicados aquí pasan a la cuenta.
+     */
+    async function signInWithGoogle(googleIdToken, { nonce } = {}) {
+      if (nonce && jwtPayload(googleIdToken)?.nonce !== nonce) throw new Error('La respuesta de Google no corresponde a este inicio de sesión. Inténtalo de nuevo.');
+      const u = await urls();
+      const saved = await readAuth();
+      let anon = null;
+      if (saved?.refreshToken && saved.provider !== 'google.com') {
+        try { anon = { uid: saved.uid, token: await idToken() }; } catch { anon = null; }
+      }
+      const body = { postBody: `id_token=${encodeURIComponent(googleIdToken)}&providerId=google.com`, requestUri: 'http://localhost', returnSecureToken: true, returnIdpCredential: true };
+      let r = null;
+      if (anon) {
+        try {
+          r = await call('POST', u.signInWithIdp, { body: { ...body, idToken: anon.token } });
+          if (r?.errorMessage) r = null; // la cuenta de Google ya existía: se entra en ella
+        } catch (e) {
+          if (!/FEDERATED_USER_ID_ALREADY_LINKED|CREDENTIAL_ALREADY_IN_USE|EMAIL_EXISTS/.test(e.raw || e.code || '')) throw e;
+        }
+      }
+      if (!r) r = await call('POST', u.signInWithIdp, { body });
+      if (r.errorMessage) throw new Error(friendly(400, '', r.errorMessage));
+      const info = { uid: r.localId, refreshToken: r.refreshToken, provider: 'google.com', email: r.email || '', name: r.displayName || r.fullName || '', photoUrl: r.photoUrl || '' };
+      await writeAuth(info);
+      token = { idToken: r.idToken, expiresAt: Date.now() + (Number(r.expiresIn) || 3600) * 1000 };
+      let idMap = {};
+      if (anon && anon.uid !== r.localId) {
+        try { idMap = await migrateDecks(anon, r.localId, r.idToken); } catch (e) { console.error('No se pudieron mover los mazos publicados', e); }
+      }
+      return { uid: info.uid, email: info.email, name: info.name, photoUrl: info.photoUrl, idMap };
+    }
+
+    /** Cierra la sesión de Google en este equipo (los datos locales se quedan). */
+    async function signOut() {
+      token = null;
+      await writeAuth(null);
+      return { ok: true };
+    }
+
+    /** Foto de perfil de Google como data: URL (la interfaz no puede cargar imágenes externas). */
+    async function googlePhoto(url) {
+      if (!GOOGLE_PHOTO_RE.test(String(url || ''))) return null;
+      const res = await platform.request('GET', String(url).replace(/=s\d+(-c)?$/, '') + '=s256-c', { binary: true });
+      if (res.status !== 200 || !res.base64) return null;
+      return `data:${res.type || 'image/jpeg'};base64,${res.base64}`;
+    }
+
+    // -------------------------------------------------------------- copia en la nube
+    async function googleSession() {
+      const a = await readAuth();
+      if (a?.provider !== 'google.com') {
+        const e = new Error('Inicia sesión con Google para guardar tus datos en la nube.');
+        e.code = 'SIGNED_OUT';
+        throw e;
+      }
+      return { tok: await idToken(), uid: a.uid };
+    }
+
+    /**
+     * Descarga la copia de la nube. Con `known` (updateTime de la última vez) devuelve
+     * { unchanged: true } si no ha cambiado. Sin copia: { empty: true }.
+     */
+    async function pull(known) {
+      const { tok, uid } = await googleSession();
+      const u = await urls();
+      const base = `${u.dbName}/users/${uid}/sync`;
+      if (known) {
+        // Comprobación barata (una sola lectura): ¿ha cambiado algo desde la última vez?
+        try {
+          const meta = await call('GET', `${u.docs}/users/${uid}/sync/meta`, { idToken: tok });
+          if (meta.updateTime === known) return { unchanged: true, updateTime: known };
+        } catch (e) { if (e.status !== 404) throw e; }
+      }
+      const names = [`${base}/meta`, ...Array.from({ length: SYNC_MAX_CHUNKS }, (_, i) => `${base}/c${i}`)];
+      // Todo en una sola lectura para que la copia sea coherente aunque otro equipo esté subiendo.
+      const res = await call('POST', `${u.docs}:batchGet`, { idToken: tok, body: { documents: names } });
+      const found = new Map((res || []).filter((x) => x.found).map((x) => [x.found.name, x.found]));
+      const meta = found.get(names[0]);
+      if (!meta) return { empty: true };
+      if (known && meta.updateTime === known) return { unchanged: true, updateTime: meta.updateTime };
+      const m = fromFields(meta.fields);
+      const parts = [];
+      for (let i = 0; i < m.chunks; i++) {
+        const doc = found.get(`${base}/c${i}`);
+        if (!doc) throw new Error('La copia de la nube está incompleta. Vuelve a sincronizar en unos segundos.');
+        parts.push(fromBase64(doc.fields.data.bytesValue));
+      }
+      const all = new Uint8Array(parts.reduce((n, p) => n + p.length, 0));
+      let off = 0;
+      for (const p of parts) { all.set(p, off); off += p.length; }
+      return { updateTime: meta.updateTime, json: await gunzip(all), device: m.device || '', size: m.size || 0 };
+    }
+
+    /**
+     * Sube los datos. `expected` es el updateTime de la copia sobre la que se combinó: si otro
+     * equipo subió algo entretanto, falla con code 'CONFLICT' (hay que descargar y combinar).
+     */
+    async function push(json, expected, device) {
+      const { tok, uid } = await googleSession();
+      const u = await urls();
+      const base = `${u.dbName}/users/${uid}/sync`;
+      const bytes = await gzip(json);
+      const n = Math.ceil(bytes.length / SYNC_CHUNK) || 1;
+      if (n > SYNC_MAX_CHUNKS) throw new Error('Tus datos son demasiado grandes para la copia en la nube (más de 9 MB comprimidos).');
+      const writes = [];
+      for (let i = 0; i < SYNC_MAX_CHUNKS; i++) {
+        const name = `${base}/c${i}`;
+        if (i < n) writes.push({ update: { name, fields: { data: { bytesValue: toBase64(bytes.subarray(i * SYNC_CHUNK, (i + 1) * SYNC_CHUNK)) } } } });
+        else writes.push({ delete: name });
+      }
+      writes.push({
+        update: { name: `${base}/meta`, fields: toFields({ chunks: n, size: bytes.length, device: String(device || '').slice(0, 40), appVersion: String(await platform.version()).slice(0, 20) }) },
+        updateTransforms: [{ fieldPath: 'updatedAt', setToServerValue: 'REQUEST_TIME' }],
+        currentDocument: expected ? { updateTime: expected } : { exists: false },
+      });
+      try {
+        const r = await call('POST', `${u.docs}:commit`, { idToken: tok, body: { writes } });
+        return { updateTime: r.writeResults[writes.length - 1].updateTime, size: bytes.length };
+      } catch (e) {
+        if (e.status === 409 || /FAILED_PRECONDITION|ALREADY_EXISTS|ABORTED/.test(e.code || '')) {
+          const c = new Error('Otro dispositivo subió cambios a la vez.');
+          c.code = 'CONFLICT';
+          throw c;
+        }
+        throw e;
+      }
+    }
+
+    return {
+      status, list, get, publish, remove, report,
+      account: { status: accountStatus, googleAuthUrl, signInWithGoogle, signOut, googlePhoto },
+      cloud: { pull, push },
+    };
   }
 
-  return { create, _test: { toFields, fromFields, sanitizeDeck, newId } };
+  return { create, jwtPayload, _test: { toFields, fromFields, sanitizeDeck, newId, gzip, gunzip, toBase64, fromBase64 } };
 });

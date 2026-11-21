@@ -19,7 +19,7 @@ let netSess = null;
 const sess = () => (netSess ||= session.fromPartition('memora-community', { cache: false }));
 const authFile = () => path.join(app.getPath('userData'), 'community-auth.json');
 
-function request(method, url, { headers, body }) {
+function request(method, url, { headers, body, binary } = {}) {
   return new Promise((resolve, reject) => {
     const req = net.request({ method, url, session: sess(), useSessionCookies: false });
     req.setHeader('User-Agent', `Memomancer/${app.getVersion()}`);
@@ -27,7 +27,14 @@ function request(method, url, { headers, body }) {
     req.on('response', (res) => {
       const chunks = [];
       res.on('data', (c) => chunks.push(c));
-      res.on('end', () => resolve({ status: res.statusCode, text: Buffer.concat(chunks).toString('utf8') }));
+      res.on('end', () => {
+        const buf = Buffer.concat(chunks);
+        if (binary) {
+          const type = String(res.headers['content-type'] || '').split(';')[0];
+          return resolve({ status: res.statusCode, base64: /^image\/(png|jpeg|webp|gif)$/.test(type) ? buf.toString('base64') : '', type });
+        }
+        resolve({ status: res.statusCode, text: buf.toString('utf8') });
+      });
       res.on('error', reject);
     });
     req.on('error', reject);
@@ -49,7 +56,7 @@ module.exports = Core.create({
     let cfg = {};
     try { cfg = JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { /* sin configurar */ }
     if (process.env.MEMORA_FIREBASE_PROJECT) cfg = { apiKey: cfg.apiKey || 'demo-key', projectId: process.env.MEMORA_FIREBASE_PROJECT };
-    return { ...cfg, emulator: EMULATOR };
+    return { ...cfg, emulator: EMULATOR, ...(process.env.MEMORA_GOOGLE_RELAY ? { googleClientId: cfg.googleClientId || 'test', authRelay: process.env.MEMORA_GOOGLE_RELAY } : {}) };
   },
   version: () => app.getVersion(),
 });

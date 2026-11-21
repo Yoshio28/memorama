@@ -33,6 +33,7 @@
       "preload.js",
       "updater.js",
       "community.js",
+      "google-auth.js",
       "firebase-config.json",
       "src/**/*"
     ],
