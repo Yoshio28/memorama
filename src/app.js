@@ -67,7 +67,7 @@ function defaultPresets() {
 function emptyDb() {
   return {
     version: 1,
-    settings: { scheduler: { ...S.DEFAULTS }, defaultNewPerDay: 20, defaultReviewsPerDay: 200, theme: 'system' },
+    settings: { scheduler: { ...S.DEFAULTS }, defaultNewPerDay: 20, defaultReviewsPerDay: 200, theme: 'system', legacySamplesChecked: true },
     decks: [], cards: [], presets: defaultPresets(), log: [],
   };
 }
@@ -86,8 +86,48 @@ function makeCard(deckId, sectionId, front, back) {
   return { id: uid(), deckId, sectionId: sectionId || null, front, back, flag: false, created: nextCreated(), srs: S.newSrs() };
 }
 
+// Mazos de ejemplo que creaba la versión 1.0.0 en el primer arranque (se retiran al actualizar).
+const LEGACY_SAMPLES = {
+  'Capitales del mundo': {
+    sections: ['Europa', 'América', 'Asia'],
+    cards: [['Francia', 'París'], ['Alemania', 'Berlín'], ['Portugal', 'Lisboa'], ['Polonia', 'Varsovia'], ['Noruega', 'Oslo'], ['Hungría', 'Budapest'],
+      ['Perú', 'Lima'], ['Canadá', 'Ottawa'], ['Chile', 'Santiago'], ['Colombia', 'Bogotá'], ['Uruguay', 'Montevideo'], ['Brasil', 'Brasilia'],
+      ['Japón', 'Tokio'], ['Corea del Sur', 'Seúl'], ['Tailandia', 'Bangkok'], ['Vietnam', 'Hanói']].map(([f, b]) => [`¿Cuál es la capital de **${f}**?`, b]),
+  },
+  'Inglés básico': {
+    sections: ['Verbos irregulares', 'Vocabulario'],
+    cards: [...[['to go', 'went · gone'], ['to eat', 'ate · eaten'], ['to see', 'saw · seen'], ['to write', 'wrote · written']].map(([f, b]) => [`Pasado y participio de *${f}*`, b]),
+      ['manzana', 'apple'], ['biblioteca', 'library'], ['cumpleaños', 'birthday'], ['aprender', 'to learn']],
+  },
+};
+
+/**
+ * Quita los mazos de ejemplo de la 1.0.0 solo si siguen intactos: todas sus tarjetas son las
+ * originales (sin editar ni añadidas) y sus secciones son las de ejemplo. Devuelve cuántos quitó.
+ */
+function removeLegacySamples(d) {
+  const removed = new Set();
+  for (const deck of d.decks) {
+    const sample = LEGACY_SAMPLES[deck.name];
+    if (!sample) continue;
+    const known = new Set(sample.cards.map(([f, b]) => `${f}\u0000${b}`));
+    const cards = d.cards.filter((c) => c.deckId === deck.id);
+    const pristine = cards.every((c) => known.has(`${c.front}\u0000${c.back}`))
+      && deck.sections.every((s) => sample.sections.includes(s.name));
+    if (pristine) removed.add(deck.id);
+  }
+  if (!removed.size) return 0;
+  const goneCards = new Set(d.cards.filter((c) => removed.has(c.deckId)).map((c) => c.id));
+  d.decks = d.decks.filter((x) => !removed.has(x.id));
+  d.cards = d.cards.filter((c) => !goneCards.has(c.id));
+  d.log = d.log.filter((l) => !goneCards.has(l.cardId));
+  for (const p of d.presets) for (const id of removed) if (p.scope?.decks) delete p.scope.decks[id];
+  return removed.size;
+}
+
 function migrate(d) {
   const base = emptyDb();
+  const samplesChecked = !!d.settings?.legacySamplesChecked; // antes de mezclar con los valores por defecto
   d.settings = Object.assign(base.settings, d.settings || {});
   d.settings.scheduler = Object.assign({ ...S.DEFAULTS }, d.settings.scheduler || {});
   d.decks = Array.isArray(d.decks) ? d.decks : [];
@@ -105,6 +145,11 @@ function migrate(d) {
     c.srs = Object.assign(S.newSrs(), c.srs || {});
     c.flag = !!c.flag;
     lastCreated = Math.max(lastCreated, c.created || 0);
+  }
+  migrate.removedSamples = 0;
+  if (!samplesChecked) {
+    migrate.removedSamples = removeLegacySamples(d);
+    d.settings.legacySamplesChecked = true;
   }
   return d;
 }
@@ -1676,7 +1721,13 @@ function toast(msg) {
   let raw = null;
   try { raw = await api.load(); } catch (err) { console.error(err); }
   if (raw) {
-    try { db = migrate(JSON.parse(raw)); }
+    try {
+      db = migrate(JSON.parse(raw));
+      if (migrate.removedSamples) {
+        persist();
+        setTimeout(() => toast(`Se quitaron ${plural(migrate.removedSamples, 'mazo de ejemplo', 'mazos de ejemplo')} de la versión anterior`), 400);
+      }
+    }
     catch (err) {
       console.error(err);
       db = emptyDb();
