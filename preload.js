@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('memora', {
   saveFile: (opts) => ipcRenderer.invoke('file:save', opts),
   openFile: (opts) => ipcRenderer.invoke('file:open', opts),
   openDataFolder: () => ipcRenderer.invoke('app:openDataFolder'),
+  clearBackups: () => ipcRenderer.invoke('app:clearBackups'),
   version: () => ipcRenderer.invoke('app:version'),
   community: {
     status: () => ipcRenderer.invoke('community:status'),

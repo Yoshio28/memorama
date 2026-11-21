@@ -91,7 +91,9 @@ Si inicias sesión con Google:
   en un solo lado se respeta, también los borrados; si la misma tarjeta se estudió en los dos,
   se queda el progreso con más repasos.
 - Los mazos que hubieras publicado en la Comunidad pasan a tu cuenta.
-- Cerrar sesión no borra nada: los datos se quedan en el dispositivo y en la cuenta.
+- Al cerrar sesión se suben los cambios pendientes y después se quitan del dispositivo los
+  mazos, el progreso, el perfil y las copias diarias: siguen en tu cuenta y vuelven al iniciar
+  sesión de nuevo. Si no se pueden subir (por ejemplo, sin internet), la app avisa antes.
 
 El inicio de sesión se hace en la página de Google del navegador; Memomancer nunca ve tu
 contraseña. Configuración: [`firebase/LEEME.md`](firebase/LEEME.md#cuenta-de-google-y-copia-en-la-nube).

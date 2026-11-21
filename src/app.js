@@ -1962,7 +1962,7 @@ function accountPanelHtml() {
     return `<h2 style="margin-bottom:4px">Cuenta de Google</h2>
       <p class="hint" style="margin:0 0 14px">Inicia sesión para guardar tus mazos, tarjetas y progreso en tu cuenta. Si pierdes o cambias de ${device}, inicia sesión en el nuevo y lo recuperas todo. Si usas Memomancer en el PC y en el móvil, se mantienen sincronizados.</p>
       ${err}<button class="btn google" data-act="acct-google">${ICON.google}Iniciar sesión con Google</button>
-      <p class="hint" style="margin:12px 0 0">Tus mazos publicados en la Comunidad pasan también a tu cuenta.</p>`;
+      <p class="hint" style="margin:12px 0 0">Tus mazos publicados en la Comunidad pasan también a tu cuenta. Al cerrar sesión, tus datos se quitan de este ${device} y se quedan en tu cuenta.</p>`;
   }
   const s = ui.sync;
   let line;
@@ -2095,21 +2095,55 @@ async function googleSignIn() {
   }
 }
 
+/**
+ * Cierra la sesión y quita de este dispositivo los datos de la cuenta (mazos, progreso, perfil,
+ * copias diarias). Antes se suben los cambios pendientes: los datos siguen en la cuenta y
+ * vuelven al iniciar sesión otra vez.
+ */
 async function googleSignOut() {
+  const where = isAndroid ? 'este teléfono' : 'este equipo';
   const ok = await confirmBox({
     title: 'Cerrar sesión',
-    message: `Tus mazos se quedan en este ${isAndroid ? 'teléfono' : 'equipo'} y también en tu cuenta, pero dejarán de sincronizarse hasta que vuelvas a iniciar sesión.`,
+    message: `Tus mazos, tu progreso y tu perfil se quitarán de ${where}. Seguirán guardados en tu cuenta de Google y volverán cuando inicies sesión de nuevo.`,
     okText: 'Cerrar sesión',
   });
   if (!ok) return;
-  if (signedIn() && localRev !== syncedRev) await syncNow();
+  // Primero se sube todo lo pendiente.
+  if (syncing) await syncing;
+  await syncNow();
+  const uploaded = ui.sync.state === 'ok' && localRev === syncedRev;
+  if (!uploaded) {
+    const force = await confirmBox({
+      title: 'No se pudieron subir los últimos cambios',
+      message: `${ui.sync.error ? esc(ui.sync.error) + '<br><br>' : ''}Si cierras sesión ahora, los cambios que no llegaron a tu cuenta se perderán. Puedes cancelar, revisar tu conexión y volver a intentarlo.`,
+      okText: 'Cerrar sesión igualmente',
+      danger: true,
+    });
+    if (!force) return;
+  }
+  clearTimeout(syncTimer);
+  clearTimeout(saveTimer);
   await api.account.signOut();
   syncState = null;
   await api.aux.write('sync-state.json', null).catch(() => {});
-  ui.account.status = await api.account.status();
+  // Este dispositivo vuelve a empezar vacío (solo se conserva el tema claro/oscuro).
+  const theme = db.settings.theme;
+  db = emptyDb();
+  db.settings.theme = theme;
+  await api.save(JSON.stringify(db));
+  if (uploaded) await api.clearBackups?.().catch(() => {});
+  localRev = 0;
+  syncedRev = 0;
+  session = null;
+  ui.account = { status: await api.account.status(), busy: false, error: '' };
   ui.sync = { state: 'idle', at: 0, error: '', device: '' };
-  render();
-  toast('Sesión cerrada');
+  ui.community = { tab: 'explore', status: 'idle', decks: [], q: '', error: '', configured: null };
+  ui.browse = { q: '', deck: '', section: '', state: '', selected: new Set() };
+  ui.addDeck = null;
+  ui.addSection = null;
+  applyTheme();
+  go({ name: 'home' });
+  toast('Sesión cerrada. Tus datos siguen en tu cuenta.');
 }
 
 // ---------------------------------------------------------------- Sincronización con la cuenta

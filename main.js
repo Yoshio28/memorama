@@ -87,6 +87,8 @@ ipcMain.handle('file:open', async (e, { filters }) => {
 });
 
 ipcMain.handle('app:openDataFolder', () => shell.openPath(dataDir()));
+// Al cerrar sesión: las copias diarias contienen los datos de la cuenta y se borran.
+ipcMain.handle('app:clearBackups', () => { fs.rmSync(backupDir(), { recursive: true, force: true }); return true; });
 ipcMain.handle('app:version', () => app.getVersion());
 
 // Actualizaciones (solo se conecta a internet cuando el usuario lo pide)

@@ -207,6 +207,7 @@
     saveFile: shareFile,
     openFile: ({ filters } = {}) => pickFile(filters),
     openDataFolder: async () => false,
+    clearBackups: () => enqueue(() => Filesystem.rmdir({ path: 'backups', directory: DATA, recursive: true }).catch(() => {})),
     version: () => versionP,
     community,
     account: {
