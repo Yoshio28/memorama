@@ -13,7 +13,7 @@ let session = null;
 let saveTimer = null;
 let lastCreated = 0;
 let appVersion = '';
-const ui = { update: { status: 'idle' }, collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
+const ui = { update: { status: 'idle' }, community: { tab: 'explore', status: 'idle', decks: [], q: '', error: '', configured: null }, collapsed: new Set(), addDeck: null, addSection: null, browse: { q: '', deck: '', section: '', state: '', selected: new Set() } };
 
 // ---------------------------------------------------------------- utilidades
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -53,6 +53,9 @@ const ICON = {
   undo: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 14 4 9l5-5"/><path d="M4 9h11a5 5 0 0 1 0 10h-3"/></svg>',
   star: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4l-5.5 2.9 1-6.2L3 9.7l6.2-.9z"/></svg>',
   starOn: '<svg viewBox="0 0 24 24" fill="currentColor"><path d="m12 3 2.8 5.8 6.2.9-4.5 4.4 1 6.2L12 17.4l-5.5 2.9 1-6.2L3 9.7l6.2-.9z"/></svg>',
+  community: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg>',
+  share: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 8l5-5 5 5"/><path d="M5 14v5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5"/></svg>',
+  download: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 19h14"/></svg>',
   close: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6 6 18"/></svg>',
 };
 
@@ -68,8 +71,8 @@ function defaultPresets() {
 function emptyDb() {
   return {
     version: 1,
-    settings: { scheduler: { ...S.DEFAULTS }, defaultNewPerDay: 20, defaultReviewsPerDay: 200, theme: 'system', legacySamplesChecked: true },
-    decks: [], cards: [], presets: defaultPresets(), log: [],
+    settings: { scheduler: { ...S.DEFAULTS }, defaultNewPerDay: 20, defaultReviewsPerDay: 200, theme: 'system', legacySamplesChecked: true, authorName: '' },
+    decks: [], cards: [], presets: defaultPresets(), log: [], published: {},
   };
 }
 
@@ -135,6 +138,7 @@ function migrate(d) {
   d.cards = Array.isArray(d.cards) ? d.cards : [];
   d.presets = Array.isArray(d.presets) ? d.presets : [];
   d.log = Array.isArray(d.log) ? d.log : [];
+  d.published = d.published && typeof d.published === 'object' ? d.published : {};
   for (const deck of d.decks) {
     deck.sections = Array.isArray(deck.sections) ? deck.sections : [];
     deck.newPerDay ??= d.settings.defaultNewPerDay;
@@ -356,7 +360,7 @@ function render() {
     $('#sidebar').style.display = '';
     renderSidebar();
   }
-  const fn = { home: renderHome, deck: renderDeck, add: renderAdd, browse: renderBrowse, stats: renderStats, settings: renderSettings, study: renderStudy }[view.name];
+  const fn = { home: renderHome, deck: renderDeck, add: renderAdd, browse: renderBrowse, community: renderCommunity, stats: renderStats, settings: renderSettings, study: renderStudy }[view.name];
   fn();
 }
 
@@ -380,7 +384,7 @@ function renderSidebar() {
   }).join('');
   $('#sidebar').innerHTML = `
     <div class="brand"><span class="logo">M</span>Memora</div>
-    <nav class="nav">${navBtn('home', 'Inicio')}${navBtn('add', 'Añadir tarjetas')}${navBtn('browse', 'Explorar')}${navBtn('stats', 'Estadísticas')}${navBtn('settings', 'Ajustes')}</nav>
+    <nav class="nav">${navBtn('home', 'Inicio')}${navBtn('add', 'Añadir tarjetas')}${navBtn('browse', 'Explorar')}${navBtn('community', 'Comunidad')}${navBtn('stats', 'Estadísticas')}${navBtn('settings', 'Ajustes')}</nav>
     <div class="side-title"><span>Mazos y secciones</span><button class="icon-btn" data-act="new-deck" title="Nuevo mazo" aria-label="Nuevo mazo">${ICON.add}</button></div>
     <ul class="deck-tree">${decks || '<li class="muted small" style="padding:8px">Aún no hay mazos</li>'}</ul>
     <div class="side-foot"><span class="small muted">Memora ${esc(appVersion)}</span>
@@ -478,6 +482,7 @@ function renderDeck() {
     <div class="page-head"><div><h1>${esc(d.name)}</h1><div class="sub">${plural(cards.length, 'tarjeta', 'tarjetas')} · ${plural(d.sections.length, 'sección', 'secciones')}</div></div>
       <div class="row">
         <button class="btn" data-act="deck-options" data-id="${d.id}">Opciones</button>
+        <button class="btn ${db.published[d.id] ? 'published' : ''}" data-act="publish-deck" data-id="${d.id}" title="Compartir este mazo en la comunidad">${db.published[d.id] ? '✓ Publicado' : ICON.share + 'Publicar'}</button>
         <button class="btn" data-act="import-csv" data-id="${d.id}">Importar…</button>
         <button class="btn" data-act="add-to" data-id="${d.id}" data-section="${sel && sel !== 'none' ? sel : ''}">${ICON.add}Añadir</button>
         <button class="btn" data-act="custom-study" data-id="${d.id}">Estudio personalizado</button>
@@ -814,6 +819,220 @@ function renderSettings() {
   bind('#s-max', (v) => { o.maxInterval = Math.max(1, +v || 36500); });
   bind('#s-newday', (v) => { set.defaultNewPerDay = Math.max(0, +v || 0); });
   bind('#s-revday', (v) => { set.defaultReviewsPerDay = Math.max(0, +v || 0); });
+}
+
+// ---------------------------------------------------------------- Comunidad
+const cm = () => ui.community;
+const REPORT_REASONS = ['Spam o publicidad', 'Contenido ofensivo o inapropiado', 'Copia contenido con derechos de autor', 'Información incorrecta', 'Otro motivo'];
+
+async function loadCommunity() {
+  const c = cm();
+  c.status = 'loading';
+  c.error = '';
+  renderCommunityBody();
+  try {
+    if (c.configured === null) c.configured = (await api.community.status()).configured;
+    if (!c.configured) { c.status = 'ready'; c.decks = []; renderCommunityBody(); return; }
+    c.decks = await api.community.list({ mine: c.tab === 'mine' });
+    c.status = 'ready';
+  } catch (err) {
+    c.status = 'error';
+    c.error = ipcError(err);
+  }
+  renderCommunityBody();
+}
+
+function renderCommunity() {
+  const c = cm();
+  $('#main').innerHTML = `<div class="page">
+    <div class="page-head"><div><h1>Comunidad</h1><div class="sub">Mazos públicos compartidos por otras personas. Descárgalos a tu colección o comparte los tuyos.</div></div>
+      <button class="btn" data-act="community-refresh">Actualizar lista</button></div>
+    <div class="row" style="margin-bottom:14px">
+      <div class="chips"><button class="chip ${c.tab === 'explore' ? 'active' : ''}" data-act="community-tab" data-tab="explore">Explorar</button>
+        <button class="chip ${c.tab === 'mine' ? 'active' : ''}" data-act="community-tab" data-tab="mine">Mis publicaciones</button></div>
+      <span class="spacer"></span>
+      ${c.tab === 'explore' ? `<input class="input" id="cm-q" style="max-width:320px" placeholder="Buscar por título, tema o autor…" value="${esc(c.q)}">` : ''}
+    </div>
+    <div id="cm-body"></div>
+    <p class="hint" style="margin-top:18px">Esta sección se conecta a internet solo mientras la usas. Para publicar se crea una sesión anónima en este equipo: si reinstalas o cambias de equipo, tus mazos seguirán publicados, pero ya no podrás retirarlos desde la app.</p>
+  </div>`;
+  const q = $('#cm-q');
+  if (q) q.oninput = () => { c.q = q.value; renderCommunityBody(); };
+  if (c.status === 'idle') loadCommunity();
+  else renderCommunityBody();
+}
+
+function communityMatches(d, q) {
+  if (!q) return true;
+  const hay = normalize([d.title, d.description, d.authorName, ...(d.sectionNames || [])].join(' '));
+  return normalize(q).split(' ').every((w) => hay.includes(w));
+}
+
+function renderCommunityBody() {
+  const el = $('#cm-body');
+  if (!el) return;
+  const c = cm();
+  if (c.status === 'loading' || c.status === 'idle') { el.innerHTML = '<div class="panel empty"><p class="upd-line" style="justify-content:center"><span class="spinner"></span>Cargando mazos de la comunidad…</p></div>'; return; }
+  if (c.status === 'error') { el.innerHTML = `<div class="panel empty"><h2>No se pudo cargar la comunidad</h2><p>${esc(c.error)}</p><button class="btn" data-act="community-refresh">Reintentar</button></div>`; return; }
+  if (!c.configured) { el.innerHTML = '<div class="panel empty"><h2>La comunidad no está disponible</h2><p>Esta versión de Memora no tiene configurado el servicio de la comunidad.</p></div>'; return; }
+  if (c.tab === 'mine') {
+    if (!c.decks.length) { el.innerHTML = '<div class="panel empty"><h2>Aún no has publicado mazos</h2><p>Abre uno de tus mazos y pulsa «Publicar» para compartirlo.</p></div>'; return; }
+    const localOf = (id) => db.decks.find((d) => db.published[d.id]?.id === id);
+    el.innerHTML = `<div class="panel"><table class="table"><thead><tr><th>Mazo publicado</th><th class="r">Tarjetas</th><th>Actualizado</th><th>Mazo local</th><th></th></tr></thead><tbody>
+      ${c.decks.map((d) => { const loc = localOf(d.id); return `<tr><td><b>${esc(d.title)}</b><div class="small muted">por ${esc(d.authorName)}</div></td><td class="r num">${d.cardCount}</td>
+        <td class="small muted">${d.updatedAt ? fmtDate(d.updatedAt) : '—'}</td><td class="small">${loc ? `<a class="link" data-act="open-deck" data-id="${loc.id}">${esc(loc.name)}</a>` : '<span class="muted">—</span>'}</td>
+        <td class="r"><button class="btn sm" data-act="community-view" data-id="${d.id}">Ver</button> <button class="btn sm danger" data-act="community-remove" data-id="${d.id}">Retirar</button></td></tr>`; }).join('')}
+      </tbody></table></div>`;
+    return;
+  }
+  const list = c.decks.filter((d) => communityMatches(d, c.q));
+  if (!c.decks.length) { el.innerHTML = '<div class="panel empty"><h2>Todavía no hay mazos públicos</h2><p>¡Sé la primera persona en compartir uno! Abre un mazo y pulsa «Publicar».</p></div>'; return; }
+  if (!list.length) { el.innerHTML = `<div class="panel empty"><h2>Sin resultados</h2><p>Ningún mazo coincide con «${esc(c.q)}».</p></div>`; return; }
+  el.innerHTML = `<div class="small muted" style="margin-bottom:8px">${plural(list.length, 'mazo', 'mazos')}</div><div class="cm-grid">${list.map((d) => `
+    <article class="cm-card" data-act="community-view" data-id="${d.id}" role="button" tabindex="0">
+      <div class="cm-title">${esc(d.title)}${d.mine ? ' <span class="badge srs">Tuyo</span>' : ''}</div>
+      <div class="small muted">por ${esc(d.authorName)} · ${plural(d.cardCount, 'tarjeta', 'tarjetas')}${d.updatedAt ? ' · ' + fmtDate(d.updatedAt) : ''}</div>
+      ${d.description ? `<p class="cm-desc">${esc(d.description)}</p>` : ''}
+      ${(d.sectionNames || []).length ? `<div class="cm-secs">${d.sectionNames.slice(0, 5).map((n) => `<span class="badge">${esc(n)}</span>`).join('')}${d.sectionNames.length > 5 ? `<span class="small muted">+${d.sectionNames.length - 5}</span>` : ''}</div>` : ''}
+    </article>`).join('')}</div>`;
+}
+
+async function viewCommunityDeck(id) {
+  const m = openModal(`${modalHead('Mazo de la comunidad')}<div class="modal-body"><p class="upd-line"><span class="spinner"></span>Cargando…</p></div>`, { wide: true });
+  let d;
+  try { d = await api.community.get(id); } catch (err) {
+    if (m.isConnected) m.querySelector('.modal-body').innerHTML = `<p class="upd-line bad">${esc(ipcError(err))}</p>`;
+    return;
+  }
+  if (!m.isConnected) return;
+  const cards = d.cards || [];
+  m.innerHTML = `${modalHead(esc(d.title))}<div class="modal-body">
+    <div class="small muted">por ${esc(d.authorName)} · ${plural(cards.length, 'tarjeta', 'tarjetas')}${d.updatedAt ? ' · actualizado el ' + fmtDate(d.updatedAt) : ''}</div>
+    ${d.description ? `<p>${esc(d.description)}</p>` : ''}
+    ${(d.sectionNames || []).length ? `<div class="cm-secs" style="margin:10px 0">${d.sectionNames.map((n) => `<span class="badge">${esc(n)}</span>`).join('')}</div>` : ''}
+    <div class="panel" style="box-shadow:none;margin-top:10px"><table class="table"><thead><tr><th>Anverso</th><th>Reverso</th><th>Sección</th></tr></thead><tbody>
+      ${cards.slice(0, 15).map((c) => `<tr><td class="cell-clip">${esc(plain(c.f))}</td><td class="cell-clip muted">${esc(plain(c.b))}</td><td class="small">${esc(c.s || '—')}</td></tr>`).join('')}
+      ${cards.length > 15 ? `<tr><td colspan="3" class="small muted">… y ${cards.length - 15} tarjetas más</td></tr>` : ''}</tbody></table></div>
+  </div><div class="modal-foot">${d.mine
+    ? `<button class="btn danger" id="cm-remove">Retirar de la comunidad</button>`
+    : `<button class="btn ghost danger" id="cm-report">Denunciar</button>`}<span class="spacer"></span>
+    <button class="btn" data-act="close-modal">Cerrar</button><button class="btn primary" id="cm-download">${ICON.download}Añadir a mis mazos</button></div>`;
+  m.querySelector('#cm-download').onclick = () => { closeModal(); downloadCommunityDeck(d); };
+  m.querySelector('#cm-report')?.addEventListener('click', () => { closeModal(); reportCommunityDeck(d); });
+  m.querySelector('#cm-remove')?.addEventListener('click', () => { closeModal(); removeCommunityDeck(d.id, d.title); });
+}
+
+function downloadCommunityDeck(d) {
+  const names = new Set(db.decks.map((x) => x.name.toLowerCase()));
+  let name = d.title;
+  for (let i = 2; names.has(name.toLowerCase()); i++) name = `${d.title} (${i})`;
+  const deck = makeDeck(name);
+  db.decks.push(deck);
+  const secs = new Map();
+  for (const n of d.sectionNames || []) secs.set(n.toLowerCase(), makeSection(deck, n));
+  for (const c of d.cards || []) {
+    let sec = null;
+    if (c.s) {
+      sec = secs.get(c.s.toLowerCase());
+      if (!sec) { sec = makeSection(deck, c.s); secs.set(c.s.toLowerCase(), sec); }
+    }
+    db.cards.push(makeCard(deck.id, sec ? sec.id : null, c.f, c.b));
+  }
+  persist();
+  toast(`«${name}» añadido a tus mazos con ${plural((d.cards || []).length, 'tarjeta', 'tarjetas')}`);
+  go({ name: 'deck', id: deck.id });
+}
+
+function reportCommunityDeck(d) {
+  const m = openModal(`${modalHead('Denunciar mazo')}<form><div class="modal-body">
+    <p class="hint" style="margin-top:0">«${esc(d.title)}» por ${esc(d.authorName)}. La denuncia es anónima y la revisará quien administra la comunidad.</p>
+    <div class="field"><label for="rp-reason">Motivo</label><select class="input" id="rp-reason">${REPORT_REASONS.map((r) => `<option>${r}</option>`).join('')}</select></div>
+    <div class="field"><label for="rp-details">Detalles (opcional)</label><textarea class="input" id="rp-details" maxlength="400" placeholder="Cuéntanos qué ocurre"></textarea></div>
+    </div><div class="modal-foot"><span class="small muted" id="rp-msg"></span><span class="spacer"></span><button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn danger" type="submit">Enviar denuncia</button></div></form>`);
+  m.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = m.querySelector('button[type=submit]');
+    btn.disabled = true;
+    const details = $('#rp-details').value.trim();
+    try {
+      await api.community.report(d.id, `${$('#rp-reason').value}${details ? ': ' + details : ''}`);
+      closeModal();
+      toast('Denuncia enviada. Gracias.');
+    } catch (err) {
+      $('#rp-msg').textContent = ipcError(err);
+      btn.disabled = false;
+    }
+  };
+}
+
+async function removeCommunityDeck(id, title) {
+  const ok = await confirmBox({ title: 'Retirar de la comunidad', message: `«${esc(title)}» dejará de estar disponible para los demás. Tu mazo local no se borra.`, okText: 'Retirar', danger: true });
+  if (!ok) return;
+  try {
+    await api.community.remove(id);
+    for (const [local, p] of Object.entries(db.published)) if (p.id === id) delete db.published[local];
+    persist();
+    toast('Mazo retirado de la comunidad');
+    cm().decks = cm().decks.filter((d) => d.id !== id);
+    if (view.name === 'community') renderCommunityBody(); else render();
+  } catch (err) {
+    toast(ipcError(err));
+  }
+}
+
+async function publishDeckModal(deck) {
+  const status = await api.community.status().catch(() => ({ configured: false }));
+  if (!status.configured) { toast('La comunidad no está disponible en esta versión de Memora'); return; }
+  const cards = db.cards.filter((c) => c.deckId === deck.id);
+  const secCount = new Set(cards.map((c) => sectionOf(c)?.name).filter(Boolean)).size;
+  const pub = db.published[deck.id];
+  const m = openModal(`${modalHead(pub ? 'Actualizar publicación' : 'Publicar en la comunidad')}<form><div class="modal-body">
+    ${pub ? `<p class="hint" style="margin-top:0">Este mazo ya está publicado (${pub.at ? 'última vez el ' + fmtDate(pub.at) : ''}). Al actualizar, la copia pública se sustituye por el contenido actual.</p>` : ''}
+    <div class="field"><label for="pb-title">Título</label><input class="input" id="pb-title" maxlength="80" value="${esc(deck.name)}"></div>
+    <div class="field"><label for="pb-desc">Descripción (opcional)</label><textarea class="input" id="pb-desc" maxlength="500" placeholder="¿De qué trata? ¿Para qué examen o nivel sirve?">${esc(deck.publicDescription || '')}</textarea></div>
+    <div class="field"><label for="pb-author">Tu nombre o apodo</label><input class="input" id="pb-author" maxlength="40" placeholder="Anónimo" value="${esc(db.settings.authorName || '')}"></div>
+    <div class="info-grid" style="grid-template-columns:1fr 1fr"><div>Se publicará<b>${plural(cards.length, 'tarjeta', 'tarjetas')} · ${plural(secCount, 'sección', 'secciones')}</b></div><div>No se publica<b>tu progreso ni tus estadísticas</b></div></div>
+    <p class="hint">Cualquier persona podrá ver y descargar este mazo. Publica solo contenido propio o que tengas permiso para compartir.</p>
+    </div><div class="modal-foot">${pub ? '<button type="button" class="btn danger" id="pb-remove">Retirar</button>' : ''}<span class="small muted" id="pb-msg"></span><span class="spacer"></span>
+      <button type="button" class="btn" data-act="close-modal">Cancelar</button><button class="btn primary" type="submit" ${cards.length ? '' : 'disabled'}>${pub ? 'Actualizar publicación' : 'Publicar'}</button></div></form>`);
+  if (!cards.length) $('#pb-msg').textContent = 'El mazo no tiene tarjetas.';
+  m.querySelector('#pb-remove')?.addEventListener('click', () => { closeModal(); removeCommunityDeck(pub.id, deck.name); });
+  m.querySelector('form').onsubmit = async (e) => {
+    e.preventDefault();
+    const btn = m.querySelector('button[type=submit]');
+    btn.disabled = true;
+    $('#pb-msg').innerHTML = '<span class="upd-line" style="margin:0"><span class="spinner"></span>Publicando…</span>';
+    const payload = {
+      title: $('#pb-title').value.trim() || deck.name,
+      description: $('#pb-desc').value.trim(),
+      authorName: $('#pb-author').value.trim() || 'Anónimo',
+      cards: cards.map((c) => ({ f: c.front, b: c.back, s: sectionOf(c)?.name || '' })),
+    };
+    db.settings.authorName = $('#pb-author').value.trim();
+    deck.publicDescription = payload.description;
+    try {
+      const r = await api.community.publish(payload, pub ? pub.id : null);
+      db.published[deck.id] = { id: r.id, at: now() };
+      persist();
+      closeModal();
+      cm().status = 'idle';
+      toast(pub ? 'Publicación actualizada' : 'Mazo publicado en la comunidad');
+      render();
+    } catch (err) {
+      const msg = ipcError(err);
+      if (pub && /ya no existe|otra sesión/.test(msg)) {
+        delete db.published[deck.id];
+        persist();
+        $('#pb-msg').textContent = msg;
+        btn.textContent = 'Publicar como nuevo';
+        btn.disabled = false;
+        render();
+        return;
+      }
+      $('#pb-msg').textContent = msg;
+      btn.disabled = false;
+    }
+  };
 }
 
 // ---------------------------------------------------------------- Actualizaciones
@@ -1261,6 +1480,7 @@ function deckOptionsModal(deck) {
     const ok = await confirmBox({ title: 'Eliminar mazo', message: `Se eliminará <b>${esc(deck.name)}</b> con sus ${plural(n, 'tarjeta', 'tarjetas')} y su historial. No se puede deshacer (salvo restaurando una copia de seguridad).`, okText: 'Eliminar mazo', danger: true });
     if (!ok) return;
     db.decks = db.decks.filter((d) => d !== deck);
+    delete db.published[deck.id];
     const gone = new Set(db.cards.filter((c) => c.deckId === deck.id).map((c) => c.id));
     db.cards = db.cards.filter((c) => !gone.has(c.id));
     for (const p of db.presets) delete p.scope.decks[deck.id];
@@ -1728,6 +1948,11 @@ const actions = {
   'export-json': exportJson,
   'import-json': importJson,
   'open-folder': () => api.openDataFolder(),
+  'community-tab': (el) => { cm().tab = el.dataset.tab; cm().status = 'idle'; renderCommunity(); },
+  'community-refresh': () => { cm().status = 'idle'; renderCommunity(); },
+  'community-view': (el) => viewCommunityDeck(el.dataset.id),
+  'community-remove': (el) => removeCommunityDeck(el.dataset.id, cm().decks.find((d) => d.id === el.dataset.id)?.title || ''),
+  'publish-deck': (el) => publishDeckModal(deckById(el.dataset.id)),
   'check-update': () => {
     if (view.name !== 'settings') go({ name: 'settings' });
     if (!['available', 'checking', 'downloading', 'installing'].includes(ui.update.status)) checkUpdate();
@@ -1846,5 +2071,5 @@ function toast(msg) {
   applyTheme();
   render();
   // Refresca los recuentos cada minuto (las tarjetas en aprendizaje vencen con el tiempo).
-  setInterval(() => { if (view.name !== 'study' && !modalOpen() && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) render(); }, 60000);
+  setInterval(() => { if (view.name !== 'study' && view.name !== 'community' && !modalOpen() && !/^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName)) render(); }, 60000);
 })();

@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain, dialog, shell, Menu, session } = require('e
 const path = require('path');
 const fs = require('fs');
 const updater = require('./updater');
+const community = require('./community');
 
 if (process.env.MEMORA_DATA_DIR) app.setPath('userData', path.resolve(process.env.MEMORA_DATA_DIR));
 
@@ -89,6 +90,14 @@ ipcMain.handle('update:install', (e) => updater.install((received, total) => {
   if (!e.sender.isDestroyed()) e.sender.send('update:progress', { received, total });
 }));
 ipcMain.handle('update:openPage', () => updater.openPage());
+
+// Comunidad (Firebase): solo se conecta cuando el usuario abre la sección o publica
+ipcMain.handle('community:status', () => community.status());
+ipcMain.handle('community:list', (_e, opts) => community.list(opts || {}));
+ipcMain.handle('community:get', (_e, id) => community.get(String(id)));
+ipcMain.handle('community:publish', (_e, deck, remoteId) => community.publish(deck, remoteId ? String(remoteId) : null));
+ipcMain.handle('community:remove', (_e, id) => community.remove(String(id)));
+ipcMain.handle('community:report', (_e, id, reason) => community.report(String(id), String(reason || '')));
 
 function createWindow() {
   const win = new BrowserWindow({

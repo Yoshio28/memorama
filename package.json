@@ -7,7 +7,8 @@
     "start": "electron .",
     "test": "node --test test/*.test.js",
     "dist": "electron-builder",
-    "dist:win": "electron-builder --win dir && node scripts/win-resources.mjs && makensis -V2 -DVERSION=$npm_package_version build/installer.nsi && node scripts/win-zip.mjs"
+    "dist:win": "electron-builder --win dir && node scripts/win-resources.mjs && makensis -V2 -DVERSION=$npm_package_version build/installer.nsi && node scripts/win-zip.mjs",
+    "test:rules": "cd firebase && firebase emulators:exec --only auth,firestore --project demo-memora \"node test-rules.mjs\""
   },
   "author": "Memora",
   "license": "MIT",
@@ -23,6 +24,8 @@
       "main.js",
       "preload.js",
       "updater.js",
+      "community.js",
+      "firebase-config.json",
       "src/**/*"
     ],
     "win": {

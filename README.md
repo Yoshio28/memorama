@@ -57,9 +57,28 @@ programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 ## 100 % local
 
 Memora no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
-tiene bloqueada cualquier conexión de red. La única excepción es el botón
-**Buscar actualizaciones**: solo cuando lo pulsas, Memora consulta la última
-release de este repositorio en GitHub.
+tiene bloqueada cualquier conexión de red. Solo hay dos excepciones, y las dos ocurren
+únicamente cuando las usas:
+
+- **Buscar actualizaciones**: consulta la última release de este repositorio en GitHub.
+- **Comunidad**: lista, descarga o publica mazos públicos (Firebase).
+
+## Comunidad
+
+En **Comunidad** puedes explorar los mazos que otras personas han hecho públicos,
+buscar por título, tema o autor, ver su contenido y **añadirlos a tus mazos** (con
+sus secciones). También puedes **denunciar** un mazo inapropiado.
+
+Para compartir uno tuyo, abre el mazo y pulsa **Publicar**. Puedes poner título,
+descripción y tu nombre o apodo. Se publican las tarjetas y sus secciones, nunca tu
+progreso. Después el botón muestra **✓ Publicado**: desde ahí puedes actualizar la
+copia pública o retirarla. Tus publicaciones aparecen en **Comunidad → Mis publicaciones**.
+
+No hace falta crear cuenta: al publicar se crea una sesión anónima guardada en tu
+equipo. Si reinstalas o cambias de equipo, tus mazos siguen publicados, pero ya no
+podrás retirarlos desde la app.
+
+Configuración, moderación y límites: [`firebase/LEEME.md`](firebase/LEEME.md).
 
 ## Actualizaciones
 
@@ -125,6 +144,9 @@ Las copias diarias están en la subcarpeta `backups/`.
 ```
 main.js            Proceso principal de Electron (ventana, archivos, copias)
 updater.js         Búsqueda, descarga verificada e instalación de actualizaciones
+community.js       Comunidad: sesión anónima y mazos públicos (API REST de Firebase)
+firebase-config.json  apiKey y projectId del proyecto de Firebase (públicos)
+firebase/          Reglas de Firestore, pruebas de las reglas y guía de configuración
 preload.js         Puente seguro entre la interfaz y el sistema de archivos
 src/index.html     Interfaz
 src/app.js         Lógica de la interfaz (vistas, sesiones, importación)

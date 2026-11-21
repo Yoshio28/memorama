@@ -112,6 +112,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; ba
 .nav svg { width: 17px; height: 17px; flex: none; }
 .side-title { display: flex; align-items: center; justify-content: space-between; padding: 12px 18px 6px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-3); font-weight: 600; border-top: 1px solid var(--border); }
 .deck-tree { list-style: none; margin: 0; padding: 0 10px 16px; overflow-y: auto; flex: 1; }
+.side-foot > span { white-space: nowrap; }
 .side-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px 12px 18px; border-top: 1px solid var(--border); }
 .deck-tree ul { list-style: none; margin: 0 0 4px; padding: 0 0 0 16px; }
 .tree-row { display: flex; align-items: center; gap: 6px; padding: 5px 8px; border-radius: 7px; cursor: pointer; min-height: 30px; }
@@ -346,3 +347,13 @@ tr[draggable="true"] { cursor: grab; }
 .upd-progress > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .15s; }
 .spinner { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--border); border-top-color: var(--accent); animation: spin .8s linear infinite; flex: none; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* comunidad */
+.cm-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; }
+.cm-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; display: flex; flex-direction: column; gap: 4px; transition: border-color .12s; }
+.cm-card:hover, .cm-card:focus-visible { border-color: var(--accent); outline: none; }
+.cm-title { font-weight: 600; font-size: 15px; display: flex; align-items: center; gap: 6px; }
+.cm-desc { margin: 6px 0 0; font-size: 13px; color: var(--text-2); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.cm-secs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; align-items: center; }
+.btn.published { color: var(--good); border-color: color-mix(in srgb, var(--good) 45%, var(--border)); }
+a.link { color: var(--accent); cursor: pointer; }
