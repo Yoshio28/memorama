@@ -3,7 +3,7 @@
  * Comunidad: mazos públicos en Firebase (Firestore + sesión anónima).
  *
  * Se usa la API REST de Firebase desde el proceso principal, con una sesión de red propia:
- * la interfaz sigue sin acceso a internet y Memora solo se conecta cuando el usuario abre
+ * la interfaz sigue sin acceso a internet y Memomancer solo se conecta cuando el usuario abre
  * «Comunidad», publica, descarga o denuncia un mazo.
  *
  * La sesión anónima (uid + refreshToken) se guarda en userData/community-auth.json. El uid
@@ -65,7 +65,7 @@ function sess() {
 function call(method, url, { body, idToken, form } = {}) {
   return new Promise((resolve, reject) => {
     const req = net.request({ method, url, session: sess(), useSessionCookies: false });
-    req.setHeader('User-Agent', `Memora/${app.getVersion()}`);
+    req.setHeader('User-Agent', `Memomancer/${app.getVersion()}`);
     if (idToken) req.setHeader('Authorization', `Bearer ${idToken}`);
     let payload = null;
     if (form) { req.setHeader('Content-Type', 'application/x-www-form-urlencoded'); payload = new URLSearchParams(form).toString(); }

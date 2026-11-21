@@ -1,15 +1,11 @@
-## Novedades en 1.1.0
-- **Comunidad**: nueva sección (icono 🌐 en la barra lateral) para **explorar, buscar y descargar mazos públicos** de otros usuarios. Al descargar uno se añade a tus mazos con sus secciones.
-- **Publicar tus mazos**: en la cabecera de un mazo pulsa **Publicar**, añade una descripción y el nombre o apodo con el que quieres aparecer. Puedes volver a publicarlo para actualizarlo o **retirarlo** cuando quieras desde *Comunidad → Mis mazos*.
-- Sin registro: Memora usa una sesión anónima guardada en tu equipo; solo esa sesión puede modificar o retirar los mazos que publicaste.
-- Solo se comparte el contenido de las tarjetas (anverso, reverso y sección), el título, la descripción y el apodo; **nunca tu progreso ni tus estadísticas**.
-- Puedes **denunciar** mazos inapropiados.
-- Memora sigue funcionando sin conexión; solo se conecta a internet al abrir Comunidad, al publicar o al buscar actualizaciones.
-
-> Si ya tienes la 1.0.3, pulsa **Buscar actualizaciones** en la barra lateral para instalar esta versión.
+## Memora ahora se llama Memomancer 🐈‍⬛🪄
+- **Nuevo nombre y nuevo icono**: un gato mago con una M en la base.
+- **Tus tarjetas se conservan**: Memomancer usa la misma carpeta de datos que Memora. Al instalar esta versión se retira la instalación antigua de Memora y sus accesos directos, y se crean los de Memomancer.
+- Si tienes Memora 1.0.3 o posterior, pulsa **Buscar actualizaciones** en la barra lateral: se actualiza sola a Memomancer.
 
 ## Descargas (Windows 64 bits)
-- **Memora-Setup-1.1.0.exe**: instalador. Si ya tienes Memora, se actualiza conservando tus tarjetas.
-- **Memora-Portable-1.1.0.zip**: no requiere instalación (la versión portable no se actualiza sola).
+- **Memomancer-Setup-1.2.0.exe**: instalador. Si ya tienes Memora o Memomancer, se actualiza conservando tus tarjetas.
+- **Memomancer-Portable-1.2.0.zip**: no requiere instalación (la versión portable no se actualiza sola).
+- *Memora-Setup-1.2.0.exe* es el mismo instalador con el nombre antiguo, para que las versiones anteriores puedan actualizarse desde la app.
 
 > El programa no tiene firma digital. Si aparece «Windows protegió su PC», pulsa **Más información → Ejecutar de todas formas**.

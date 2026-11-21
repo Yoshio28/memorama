@@ -104,7 +104,7 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; ba
 /* ---------- Sidebar ---------- */
 .sidebar { background: var(--sidebar); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
 .brand { display: flex; align-items: center; gap: 10px; padding: 18px 18px 12px; font-weight: 700; font-size: 17px; }
-.logo { width: 28px; height: 28px; border-radius: 8px; background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font-size: 15px; }
+.logo { width: 32px; height: 32px; flex: none; display: block; }
 .nav { display: flex; flex-direction: column; gap: 2px; padding: 4px 10px 10px; }
 .nav button { display: flex; align-items: center; gap: 10px; border: 0; background: none; padding: 8px 10px; border-radius: 8px; cursor: pointer; text-align: left; color: var(--text-2); }
 .nav button:hover { background: var(--surface-2); color: var(--text); }

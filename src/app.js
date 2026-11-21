@@ -383,11 +383,11 @@ function renderSidebar() {
         ${open && secs ? `<ul>${secs}</ul>` : ''}</li>`;
   }).join('');
   $('#sidebar').innerHTML = `
-    <div class="brand"><span class="logo">M</span>Memora</div>
+    <div class="brand"><img class="logo" src="icon.svg" alt="">Memomancer</div>
     <nav class="nav">${navBtn('home', 'Inicio')}${navBtn('add', 'Añadir tarjetas')}${navBtn('browse', 'Explorar')}${navBtn('community', 'Comunidad')}${navBtn('stats', 'Estadísticas')}${navBtn('settings', 'Ajustes')}</nav>
     <div class="side-title"><span>Mazos y secciones</span><button class="icon-btn" data-act="new-deck" title="Nuevo mazo" aria-label="Nuevo mazo">${ICON.add}</button></div>
     <ul class="deck-tree">${decks || '<li class="muted small" style="padding:8px">Aún no hay mazos</li>'}</ul>
-    <div class="side-foot"><span class="small muted">Memora ${esc(appVersion)}</span>
+    <div class="side-foot"><span class="small muted" title="Memomancer ${esc(appVersion)}">v${esc(appVersion)}</span>
       ${ui.update.status === 'available'
         ? `<button class="btn sm primary" data-act="check-update">Actualizar a ${esc(ui.update.info.latest)}</button>`
         : '<button class="btn sm ghost" data-act="check-update">Buscar actualizaciones</button>'}</div>`;
@@ -874,7 +874,7 @@ function renderCommunityBody() {
   const c = cm();
   if (c.status === 'loading' || c.status === 'idle') { el.innerHTML = '<div class="panel empty"><p class="upd-line" style="justify-content:center"><span class="spinner"></span>Cargando mazos de la comunidad…</p></div>'; return; }
   if (c.status === 'error') { el.innerHTML = `<div class="panel empty"><h2>No se pudo cargar la comunidad</h2><p>${esc(c.error)}</p><button class="btn" data-act="community-refresh">Reintentar</button></div>`; return; }
-  if (!c.configured) { el.innerHTML = '<div class="panel empty"><h2>La comunidad no está disponible</h2><p>Esta versión de Memora no tiene configurado el servicio de la comunidad.</p></div>'; return; }
+  if (!c.configured) { el.innerHTML = '<div class="panel empty"><h2>La comunidad no está disponible</h2><p>Esta versión de Memomancer no tiene configurado el servicio de la comunidad.</p></div>'; return; }
   if (c.tab === 'mine') {
     if (!c.decks.length) { el.innerHTML = '<div class="panel empty"><h2>Aún no has publicado mazos</h2><p>Abre uno de tus mazos y pulsa «Publicar» para compartirlo.</p></div>'; return; }
     const localOf = (id) => db.decks.find((d) => db.published[d.id]?.id === id);
@@ -982,7 +982,7 @@ async function removeCommunityDeck(id, title) {
 
 async function publishDeckModal(deck) {
   const status = await api.community.status().catch(() => ({ configured: false }));
-  if (!status.configured) { toast('La comunidad no está disponible en esta versión de Memora'); return; }
+  if (!status.configured) { toast('La comunidad no está disponible en esta versión de Memomancer'); return; }
   const cards = db.cards.filter((c) => c.deckId === deck.id);
   const secCount = new Set(cards.map((c) => sectionOf(c)?.name).filter(Boolean)).size;
   const pub = db.published[deck.id];
@@ -1057,7 +1057,7 @@ function updatePanelHtml() {
   const u = ui.update;
   const busy = ['checking', 'downloading', 'installing'].includes(u.status);
   let body = '';
-  if (u.status === 'idle') body = '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, se descarga e instala sola y Memora se vuelve a abrir.</p>';
+  if (u.status === 'idle') body = '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, se descarga e instala sola y Memomancer se vuelve a abrir.</p>';
   else if (u.status === 'checking') body = '<p class="upd-line"><span class="spinner"></span>Buscando actualizaciones…</p>';
   else if (u.status === 'uptodate') body = `<p class="upd-line ok">✓ Tienes la última versión (${esc(u.info.latest)}).</p>`;
   else if (u.status === 'available') {
@@ -1070,14 +1070,14 @@ function updatePanelHtml() {
   } else if (u.status === 'downloading') {
     const pct = u.total ? Math.min(100, Math.round((u.received / u.total) * 100)) : 0;
     body = `<div class="upd-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
-      <p class="hint">Descargando Memora ${esc(u.info.latest)}… ${mb(u.received || 0)} de ${mb(u.total || 0)} MB (${pct} %)</p>`;
+      <p class="hint">Descargando Memomancer ${esc(u.info.latest)}… ${mb(u.received || 0)} de ${mb(u.total || 0)} MB (${pct} %)</p>`;
   } else if (u.status === 'installing') {
-    body = `<p class="upd-line"><span class="spinner"></span>Instalando Memora ${esc(u.info.latest)}… Se cerrará y volverá a abrirse en unos segundos.</p>`;
+    body = `<p class="upd-line"><span class="spinner"></span>Instalando Memomancer ${esc(u.info.latest)}… Se cerrará y volverá a abrirse en unos segundos.</p>`;
   } else if (u.status === 'error') body = `<p class="upd-line bad">${esc(u.error)}</p>`;
   return `<div class="row" style="justify-content:space-between;margin-bottom:6px"><h2>Actualizaciones</h2><span class="small muted">Versión instalada: <b>${esc(appVersion)}</b></span></div>
     ${body}
     ${busy || u.status === 'available' ? '' : '<div class="row" style="margin-top:12px"><button class="btn" data-act="check-update">Buscar actualizaciones</button></div>'}
-    <p class="hint" style="margin:12px 0 0">Memora solo se conecta a internet cuando pulsas «Buscar actualizaciones». El resto del tiempo funciona sin conexión.</p>`;
+    <p class="hint" style="margin:12px 0 0">Memomancer solo se conecta a internet cuando pulsas «Buscar actualizaciones». El resto del tiempo funciona sin conexión.</p>`;
 }
 
 function renderUpdatePanel() {
@@ -1102,7 +1102,7 @@ async function installUpdate() {
   const info = ui.update.info;
   const ok = await confirmBox({
     title: `Actualizar a la versión ${esc(info.latest)}`,
-    message: `Se descargará Memora ${esc(info.latest)} (${mb(info.size)} MB). Después Memora se cerrará unos segundos para instalarla y se volverá a abrir sola.<br><br>Tus tarjetas, mazos y ajustes se conservan.`,
+    message: `Se descargará Memomancer ${esc(info.latest)} (${mb(info.size)} MB). Después Memomancer se cerrará unos segundos para instalarla y se volverá a abrir sola.<br><br>Tus tarjetas, mazos y ajustes se conservan.`,
     okText: 'Descargar e instalar',
   });
   if (!ok) return;
@@ -1842,18 +1842,18 @@ async function exportCsv() {
 }
 
 async function exportJson() {
-  const path = await api.saveFile({ defaultName: `memora-copia-${new Date().toISOString().slice(0, 10)}.json`, content: JSON.stringify(db, null, 1), filters: [{ name: 'Copia de Memora', extensions: ['json'] }] });
+  const path = await api.saveFile({ defaultName: `memora-copia-${new Date().toISOString().slice(0, 10)}.json`, content: JSON.stringify(db, null, 1), filters: [{ name: 'Copia de Memomancer', extensions: ['json'] }] });
   if (path) toast('Copia exportada');
 }
 async function importJson() {
-  const file = await api.openFile({ filters: [{ name: 'Copia de Memora', extensions: ['json'] }] });
+  const file = await api.openFile({ filters: [{ name: 'Copia de Memomancer', extensions: ['json'] }] });
   if (!file) return;
   let data;
   try {
     data = JSON.parse(file.content);
     if (!Array.isArray(data.decks) || !Array.isArray(data.cards)) throw new Error('formato');
   } catch {
-    return toast('El archivo no es una copia válida de Memora');
+    return toast('El archivo no es una copia válida de Memomancer');
   }
   const ok = await confirmBox({ title: 'Restaurar copia', message: `Se reemplazarán todos tus datos actuales por los de <b>${esc(file.name)}</b> (${plural(data.decks.length, 'mazo', 'mazos')}, ${plural(data.cards.length, 'tarjeta', 'tarjetas')}). Antes conviene exportar una copia de lo actual.`, okText: 'Restaurar', danger: true });
   if (!ok) return;

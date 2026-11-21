@@ -1,6 +1,6 @@
 {
   "name": "memora",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Tarjetas de estudio con repetición espaciada, secciones y modos de estudio personalizables",
   "main": "main.js",
   "scripts": {
@@ -10,7 +10,7 @@
     "dist:win": "electron-builder --win dir && node scripts/win-resources.mjs && makensis -V2 -DVERSION=$npm_package_version build/installer.nsi && node scripts/win-zip.mjs",
     "test:rules": "cd firebase && firebase emulators:exec --only auth,firestore --project demo-memora \"node test-rules.mjs\""
   },
-  "author": "Memora",
+  "author": "Memomancer",
   "license": "MIT",
   "devDependencies": {
     "electron": "^33.2.1",
@@ -19,7 +19,7 @@
   },
   "build": {
     "appId": "app.memora.flashcards",
-    "productName": "Memora",
+    "productName": "Memomancer",
     "files": [
       "main.js",
       "preload.js",

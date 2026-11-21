@@ -6,7 +6,11 @@ const fs = require('fs');
 const updater = require('./updater');
 const community = require('./community');
 
-if (process.env.MEMORA_DATA_DIR) app.setPath('userData', path.resolve(process.env.MEMORA_DATA_DIR));
+// Los datos siguen en la carpeta «memora» de siempre (%APPDATA%\memora en Windows) aunque la app
+// ahora se llame Memomancer: así quien actualiza conserva sus tarjetas sin migrar nada.
+app.setPath('userData', process.env.MEMORA_DATA_DIR
+  ? path.resolve(process.env.MEMORA_DATA_DIR)
+  : path.join(app.getPath('appData'), 'memora'));
 
 const dataDir = () => app.getPath('userData');
 const dataFile = () => path.join(dataDir(), 'memora-data.json');
@@ -105,7 +109,7 @@ function createWindow() {
     height: 820,
     minWidth: 900,
     minHeight: 600,
-    title: 'Memora',
+    title: 'Memomancer',
     backgroundColor: '#f6f5f2',
     show: false,
     webPreferences: {

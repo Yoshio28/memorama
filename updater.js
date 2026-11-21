@@ -2,13 +2,13 @@
 /*
  * Actualizaciones desde las releases de GitHub.
  *
- * Memora solo se conecta a internet cuando el usuario pulsa «Buscar actualizaciones».
+ * Memomancer solo se conecta a internet cuando el usuario pulsa «Buscar actualizaciones».
  * El resto de la app sigue sin red: las peticiones de la interfaz están bloqueadas en la
  * sesión por defecto, y el actualizador usa una sesión aparte que solo se abre aquí.
  *
  * Flujo: check() consulta la última release → install() descarga el instalador, comprueba
  * tamaño y SHA-256 publicados por GitHub y lo ejecuta en modo silencioso (/S); el instalador
- * cierra Memora, actualiza los archivos y vuelve a abrirla (/RELAUNCH).
+ * cierra Memomancer, actualiza los archivos y vuelve a abrirla (/RELAUNCH).
  */
 const { app, net, session, shell } = require('electron');
 const { spawn } = require('child_process');
@@ -19,7 +19,7 @@ const path = require('path');
 const REPO = 'Yoshio28/memorama';
 const API = process.env.MEMORA_UPDATE_API || `https://api.github.com/repos/${REPO}/releases/latest`;
 const RELEASES_PAGE = `https://github.com/${REPO}/releases/latest`;
-const ASSET_RE = /^Memora-Setup-(\d+\.\d+\.\d+)\.exe$/;
+const ASSET_RE = /^Memomancer-Setup-(\d+\.\d+\.\d+)\.exe$/;
 // Solo para pruebas automáticas: no ejecuta el instalador, deja constancia en un archivo.
 const TEST_MODE = process.env.MEMORA_UPDATE_TEST === '1';
 
@@ -42,13 +42,13 @@ function compareVersions(a, b) {
 /** ¿Está instalada con el instalador? (la versión portable no puede actualizarse sola) */
 function isInstalled() {
   if (TEST_MODE) return true;
-  return process.platform === 'win32' && fs.existsSync(path.join(path.dirname(process.execPath), 'Desinstalar Memora.exe'));
+  return process.platform === 'win32' && fs.existsSync(path.join(path.dirname(process.execPath), 'Desinstalar Memomancer.exe'));
 }
 
 function request(url, onResponse) {
   return new Promise((resolve, reject) => {
     const req = net.request({ url, session: netSession(), redirect: 'follow', useSessionCookies: false });
-    req.setHeader('User-Agent', `Memora/${app.getVersion()}`);
+    req.setHeader('User-Agent', `Memomancer/${app.getVersion()}`);
     req.setHeader('Accept', url === API ? 'application/vnd.github+json' : 'application/octet-stream');
     req.on('response', (res) => {
       if (res.statusCode !== 200) {
@@ -135,7 +135,7 @@ async function install(onProgress) {
   }
   const child = spawn(dest, args, { detached: true, stdio: 'ignore', windowsHide: false });
   child.unref();
-  // El instalador cierra Memora; salimos antes por si acaso, dando tiempo a que arranque.
+  // El instalador cierra Memomancer; salimos antes por si acaso, dando tiempo a que arranque.
   setTimeout(() => app.quit(), 800);
   return { ok: true };
 }

@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3b2a7a"/>
+      <stop offset="1" stop-color="#1a1240"/>
+    </linearGradient>
+    <linearGradient id="hat" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#8f6cf0"/>
+      <stop offset="1" stop-color="#5a3bc4"/>
+    </linearGradient>
+    <linearGradient id="gold" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffe08a"/>
+      <stop offset="1" stop-color="#f2b33d"/>
+    </linearGradient>
+    <linearGradient id="stone" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4a3d8f"/>
+      <stop offset="1" stop-color="#2f2566"/>
+    </linearGradient>
+  </defs>
+
+  <!-- Fondo -->
+  <rect x="8" y="8" width="496" height="496" rx="112" fill="url(#bg)"/>
+  <g fill="#ffe08a">
+    <path d="M78 120 l6 14 14 6 -14 6 -6 14 -6 -14 -14 -6 14 -6z" opacity=".85"/>
+    <path d="M430 196 l4 10 10 4 -10 4 -4 10 -4 -10 -10 -4 10 -4z" opacity=".7"/>
+    <circle cx="112" cy="250" r="5" opacity=".6"/>
+    <circle cx="404" cy="96" r="6" opacity=".7"/>
+  </g>
+
+  <!-- Cola -->
+  <path d="M330 360 C400 356 412 300 384 270 C372 258 358 266 366 280 C380 304 368 330 322 334 Z" fill="#14101f"/>
+
+  <!-- Cuerpo -->
+  <path d="M172 372 C164 318 186 262 222 248 L290 248 C326 262 348 318 340 372 Z" fill="#14101f"/>
+  <!-- Capa con borde dorado -->
+  <path d="M190 250 C176 292 172 336 174 372 L338 372 C340 336 336 292 322 250 L298 262 C290 300 274 330 256 344 C238 330 222 300 214 262 Z" fill="url(#hat)"/>
+  <path d="M256 344 L256 372" stroke="#ffe08a" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="256" cy="282" r="11" fill="url(#gold)"/>
+
+  <!-- Cabeza -->
+  <path d="M170 180 L176 118 L218 150 Z" fill="#14101f"/>
+  <path d="M342 180 L336 118 L294 150 Z" fill="#14101f"/>
+  <ellipse cx="256" cy="200" rx="92" ry="78" fill="#14101f"/>
+  <path d="M180 170 L182 132 L208 152 Z" fill="#e58bb6" opacity=".55"/>
+  <path d="M332 170 L330 132 L304 152 Z" fill="#e58bb6" opacity=".55"/>
+  <!-- Ojos -->
+  <ellipse cx="222" cy="204" rx="18" ry="20" fill="url(#gold)"/>
+  <ellipse cx="290" cy="204" rx="18" ry="20" fill="url(#gold)"/>
+  <ellipse cx="222" cy="206" rx="5" ry="14" fill="#14101f"/>
+  <ellipse cx="290" cy="206" rx="5" ry="14" fill="#14101f"/>
+  <circle cx="228" cy="197" r="4" fill="#fff"/>
+  <circle cx="296" cy="197" r="4" fill="#fff"/>
+  <!-- Nariz y boca -->
+  <path d="M248 232 L264 232 L256 241 Z" fill="#e58bb6"/>
+  <path d="M256 241 C252 250 242 251 238 246 M256 241 C260 250 270 251 274 246" stroke="#3a3155" stroke-width="4" fill="none" stroke-linecap="round"/>
+  <!-- Bigotes -->
+  <g stroke="#7d73a8" stroke-width="3" stroke-linecap="round">
+    <path d="M200 236 L150 228 M202 246 L152 252"/>
+    <path d="M312 236 L362 228 M310 246 L360 252"/>
+  </g>
+
+  <!-- Sombrero de mago -->
+  <path d="M170 142 C200 120 232 108 238 70 C244 40 268 22 300 30 C278 40 272 62 280 96 C288 124 306 132 342 142 C300 154 212 154 170 142 Z" fill="url(#hat)"/>
+  <ellipse cx="256" cy="144" rx="112" ry="20" fill="#4a2fa6"/>
+  <path d="M176 136 C220 150 292 150 336 136" stroke="url(#gold)" stroke-width="10" fill="none" stroke-linecap="round"/>
+  <path d="M262 74 l5 12 12 5 -12 5 -5 12 -5 -12 -12 -5 12 -5z" fill="#ffe08a"/>
+  <circle cx="300" cy="30" r="9" fill="url(#gold)"/>
+
+  <!-- Base con la M -->
+  <path d="M130 372 L382 372 L398 412 L114 412 Z" fill="url(#stone)"/>
+  <rect x="100" y="408" width="312" height="62" rx="16" fill="url(#stone)"/>
+  <rect x="100" y="408" width="312" height="8" rx="4" fill="#6a5bb8" opacity=".6"/>
+  <path d="M220 458 L220 418 L256 446 L292 418 L292 458" stroke="url(#gold)" stroke-width="13" fill="none" stroke-linejoin="round" stroke-linecap="round"/>
+</svg>

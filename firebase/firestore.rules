@@ -1,6 +1,6 @@
 rules_version = '2';
 
-// Reglas de la comunidad de Memora.
+// Reglas de la comunidad de Memomancer.
 // - Cualquiera puede leer los mazos públicos (no hace falta sesión).
 // - Publicar requiere sesión (anónima vale); el mazo queda a nombre de esa sesión.
 // - Solo el dueño puede actualizar o retirar su mazo.

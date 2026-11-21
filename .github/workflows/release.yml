@@ -48,9 +48,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ steps.ver.outputs.tag }}
         run: |
+          # Copia con el nombre antiguo: Memora 1.0.3–1.1.0 busca «Memora-Setup-*.exe» para actualizarse desde la app.
+          cp dist/Memomancer-Setup-*.exe "dist/Memora-Setup-${TAG#v}.exe"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip --clobber
+            gh release upload "$TAG" dist/Memomancer-Setup-*.exe dist/Memomancer-Portable-*.zip dist/Memora-Setup-*.exe --clobber
           else
-            gh release create "$TAG" dist/Memora-Setup-*.exe dist/Memora-Portable-*.zip \
-              --target "$GITHUB_SHA" --title "Memora ${TAG#v}" --notes-file .github/release-notes.md
+            gh release create "$TAG" dist/Memomancer-Setup-*.exe dist/Memomancer-Portable-*.zip dist/Memora-Setup-*.exe \
+              --target "$GITHUB_SHA" --title "Memomancer ${TAG#v}" --notes-file .github/release-notes.md
           fi

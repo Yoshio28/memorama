@@ -1,11 +1,11 @@
-# Comunidad de Memora (Firebase)
+# Comunidad de Memomancer (Firebase)
 
 La sección **Comunidad** guarda los mazos públicos en Cloud Firestore y usa
 **inicio de sesión anónimo** de Firebase Authentication. Todo cabe en el plan
 gratuito (Spark).
 
 - Explorar y descargar mazos no requiere sesión.
-- Al publicar por primera vez, Memora crea en silencio una sesión anónima y la guarda
+- Al publicar por primera vez, Memomancer crea en silencio una sesión anónima y la guarda
   en el equipo (`community-auth.json` en la carpeta de datos). Esa sesión es la dueña
   de los mazos que publica: solo ella puede actualizarlos o retirarlos.
 - Se publica el contenido de las tarjetas (anverso, reverso y sección), el título,
@@ -22,7 +22,7 @@ gratuito (Spark).
 4. En Firestore, pestaña **Reglas**: borra lo que haya, pega el contenido de
    [`firestore.rules`](firestore.rules) y pulsa **Publicar**.
 5. ⚙️ **Configuración del proyecto** → *General* → *Tus apps* → icono web `</>` →
-   registra la app («Memora», sin Hosting). Copia `apiKey` y `projectId` del bloque
+   registra la app («Memomancer», sin Hosting). Copia `apiKey` y `projectId` del bloque
    `firebaseConfig` y ponlos en [`../firebase-config.json`](../firebase-config.json).
 
 `apiKey` y `projectId` no son secretos: identifican el proyecto y van dentro de la

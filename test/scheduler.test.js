@@ -86,6 +86,9 @@ test('isReviewDue usa el inicio del día de estudio', () => {
 test('preview devuelve etiquetas legibles para los cuatro botones', () => {
   const p = S.preview(S.newSrs(), NOW);
   assert.deepEqual(p, { 1: '1 min', 2: '6 min', 3: '10 min', 4: '4 d' });
+  // Por la tarde-noche el intervalo sigue siendo «4 d», aunque falten menos de 3,5 días hasta la fecha.
+  const evening = new Date(2026, 10, 19, 22, 0, 0).getTime();
+  assert.equal(S.preview(S.newSrs(), evening)[4], '4 d');
   assert.equal(S.formatDelay(45 * DAY), '1,5 m');
   assert.equal(S.formatDelay(400 * DAY), '1,1 a');
 });

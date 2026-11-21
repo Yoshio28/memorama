@@ -1,4 +1,8 @@
-# Memora
+# Memomancer
+
+<img src="build/icon.png" alt="Icono de Memomancer: un gato mago sobre una base con una M" width="128">
+
+> Antes se llamaba **Memora**. Desde la 1.2.0 se llama Memomancer; tus tarjetas se conservan.
 
 Aplicación de escritorio de tarjetas de estudio con **repetición espaciada**
 (Windows, macOS y Linux). Funciona como las apps clásicas de flashcards: cada
@@ -49,14 +53,14 @@ Además añade dos cosas:
 
 ## Descargar
 
-**Windows:** descarga `Memora-Setup-<versión>.exe` desde
+**Windows:** descarga `Memomancer-Setup-<versión>.exe` desde
 [Releases](https://github.com/Yoshio28/memorama/releases/latest) y ábrelo. El
 programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 **Más información → Ejecutar de todas formas**. También hay una versión portable en `.zip`.
 
 ## 100 % local
 
-Memora no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
+Memomancer no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
 tiene bloqueada cualquier conexión de red. Solo hay dos excepciones, y las dos ocurren
 únicamente cuando las usas:
 
@@ -84,11 +88,11 @@ Configuración, moderación y límites: [`firebase/LEEME.md`](firebase/LEEME.md)
 
 En **Ajustes → Actualizaciones**, o con el botón de la parte inferior de la barra
 lateral, pulsa **Buscar actualizaciones**. Si hay una versión nueva verás sus
-novedades y el botón **Descargar e instalar**. Memora descarga el instalador,
+novedades y el botón **Descargar e instalar**. Memomancer descarga el instalador,
 comprueba su tamaño y su huella SHA-256 publicada por GitHub, lo instala en
 silencio y se vuelve a abrir. Tus tarjetas y ajustes se conservan.
 
-- Solo funciona en copias instaladas con `Memora-Setup-*.exe`. La versión portable
+- Solo funciona en copias instaladas con `Memomancer-Setup-*.exe`. La versión portable
   muestra el enlace a la página de descarga.
 - El actualizador existe a partir de la 1.0.3: si tienes una versión anterior,
   instala la 1.0.3 a mano una vez.
@@ -118,10 +122,10 @@ npm run dist:win
 
 Genera en `dist/`:
 
-- `Memora-Setup-<versión>.exe`: instalador. Instala para el usuario actual (sin
+- `Memomancer-Setup-<versión>.exe`: instalador. Instala para el usuario actual (sin
   permisos de administrador) y crea accesos directos en el menú Inicio y el
   escritorio, además de un desinstalador.
-- `Memora-Portable-<versión>.zip`: descomprímelo y abre `Memora.exe`. No requiere instalación.
+- `Memomancer-Portable-<versión>.zip`: descomprímelo y abre `Memomancer.exe`. No requiere instalación.
 
 El proceso funciona en Windows, Linux o macOS. Necesita `makensis` (NSIS) y `zip`
 en el PATH, pero no Wine: el icono y la versión se incrustan con `resedit`
@@ -137,7 +141,8 @@ En la carpeta de datos de la aplicación (`Ajustes → Abrir carpeta de datos`):
 - macOS: `~/Library/Application Support/memora/memora-data.json`
 - Linux: `~/.config/memora/memora-data.json`
 
-Las copias diarias están en la subcarpeta `backups/`.
+La carpeta sigue llamándose `memora` (el nombre anterior de la app) para que las
+actualizaciones conserven tus tarjetas. Las copias diarias están en la subcarpeta `backups/`.
 
 ## Estructura
 

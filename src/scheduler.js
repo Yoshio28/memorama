@@ -161,7 +161,9 @@
     const out = {};
     for (const r of [1, 2, 3, 4]) {
       const next = answer(srs, r, now, o);
-      out[r] = formatDelay(Math.max(0, next.due - now));
+      // En repaso se muestra el intervalo en días, no el tiempo hasta la fecha: como el día de
+      // estudio empieza a las 4:00, por la tarde «4 d» saldría como «3 d».
+      out[r] = next.state === 'review' ? formatDelay(next.interval * DAY) : formatDelay(Math.max(0, next.due - now));
     }
     return out;
   }
