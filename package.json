@@ -1,6 +1,6 @@
 {
   "name": "memora",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "description": "Tarjetas de estudio con repetición espaciada, secciones y modos de estudio personalizables",
   "main": "main.js",
   "scripts": {
@@ -8,11 +8,19 @@
     "test": "node --test test/*.test.js",
     "dist": "electron-builder",
     "dist:win": "electron-builder --win dir && node scripts/win-resources.mjs && makensis -V2 -DVERSION=$npm_package_version build/installer.nsi && node scripts/win-zip.mjs",
-    "test:rules": "cd firebase && firebase emulators:exec --only auth,firestore --project demo-memora \"node test-rules.mjs\""
+    "test:rules": "cd firebase && firebase emulators:exec --only auth,firestore --project demo-memora \"node test-rules.mjs\"",
+    "build:mobile": "node scripts/build-mobile.mjs && npx cap sync android"
   },
   "author": "Memomancer",
   "license": "MIT",
   "devDependencies": {
+    "@capacitor/android": "8.6.0",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/browser": "8.0.5",
+    "@capacitor/cli": "8.6.0",
+    "@capacitor/core": "8.6.0",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/share": "8.0.3",
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "resedit": "^2.0.3"

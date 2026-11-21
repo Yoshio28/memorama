@@ -1,0 +1,33 @@
+name: Comprobar Android
+
+# Compila el APK sin publicarlo (firmado con la clave de depuración) en ramas android-* o a mano.
+# Sirve para comprobar que la app de Android compila antes de llevarla a main.
+on:
+  push:
+    branches: ['android-**']
+  workflow_dispatch:
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - run: npm test
+      - run: npm run build:mobile
+      - name: Compilar APK
+        working-directory: android
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+      - uses: actions/upload-artifact@v4
+        with:
+          name: memomancer-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
+          retention-days: 7

@@ -58,6 +58,12 @@ Además añade dos cosas:
 programa no tiene firma digital: si aparece «Windows protegió su PC», pulsa
 **Más información → Ejecutar de todas formas**. También hay una versión portable en `.zip`.
 
+**Android (7 o posterior):** descarga `Memomancer-<versión>.apk` desde la misma página
+de [Releases](https://github.com/Yoshio28/memorama/releases/latest) en el teléfono y
+ábrelo. La primera vez Android pedirá permiso para instalar apps desde el navegador o el
+gestor de archivos. Para pasar tus mazos entre el PC y el móvil usa *Ajustes →
+Exportar copia (JSON)* en uno y *Restaurar copia…* en el otro.
+
 ## 100 % local
 
 Memomancer no necesita internet ni cuentas: todo se guarda en tu equipo y la interfaz
@@ -133,6 +139,23 @@ en el PATH, pero no Wine: el icono y la versión se incrustan con `resedit`
 
 Para macOS y Linux: `npx electron-builder --mac` (en un Mac) o `npx electron-builder --linux`.
 
+### App de Android
+
+La app de Android usa [Capacitor](https://capacitorjs.com) con la misma interfaz de `src/`.
+`mobile/bridge.js` sustituye a `preload.js` y `main.js`: guarda los datos en la carpeta
+privada de la app, exporta con el menú de compartir y gestiona el botón Atrás.
+
+```bash
+npm run build:mobile                       # prepara www/ y sincroniza el proyecto android/
+cd android && ./gradlew assembleRelease    # necesita el SDK de Android y JDK 21
+```
+
+GitHub Actions compila el APK en cada release (`.github/workflows/release.yml`) y lo firma
+con la clave guardada en los secretos `ANDROID_KEYSTORE_BASE64` y
+`ANDROID_KEYSTORE_PASSWORD`. Todas las versiones deben firmarse con esa misma clave: si
+se pierde, el APK nuevo no podrá instalarse encima del anterior. En las ramas `android-*`,
+`android-check.yml` compila un APK de prueba sin publicarlo.
+
 ## Dónde se guardan los datos
 
 En la carpeta de datos de la aplicación (`Ajustes → Abrir carpeta de datos`):
@@ -156,6 +179,10 @@ preload.js         Puente seguro entre la interfaz y el sistema de archivos
 src/index.html     Interfaz
 src/app.js         Lógica de la interfaz (vistas, sesiones, importación)
 src/scheduler.js   Algoritmo de repetición espaciada (sin dependencias)
-src/styles.css     Estilos (tema claro y oscuro)
+src/styles.css     Estilos (tema claro y oscuro, y diseño para móvil)
+src/community-core.js  Lógica de la Comunidad común a escritorio y Android
+mobile/bridge.js   Capa nativa de Android (Capacitor): datos, archivos, Atrás, actualizaciones
+android/           Proyecto de Android (generado con Capacitor y ajustado: iconos, versión, firma)
+capacitor.config.json  Configuración de Capacitor
 test/              Pruebas del algoritmo (node --test)
 ```

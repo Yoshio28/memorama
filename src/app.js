@@ -3,6 +3,10 @@
 
 const S = window.Scheduler;
 const api = window.memora;
+// 'desktop' (Electron) o 'android' (Capacitor, mobile/bridge.js)
+const platform = api.platform || 'desktop';
+const isAndroid = platform === 'android';
+document.documentElement.dataset.platform = platform;
 
 // Colores de sección (paleta categórica validada para daltonismo, orden fijo).
 const COLORS = ['#2a78d6', '#eb6834', '#1baf7a', '#eda100', '#e87ba4', '#008300', '#6250d6', '#e34948'];
@@ -41,6 +45,7 @@ function nextCreated() {
 }
 
 const ICON = {
+  menu: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
   home: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10.5 12 3l9 7.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>',
   add: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>',
   browse: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>',
@@ -344,14 +349,36 @@ function applyTheme() {
 }
 
 function go(v) {
+  setDrawer(false);
   view = v;
   if (v.name !== 'study') session = null;
   render();
   $('#main').scrollTop = 0;
 }
 
+/** Menú lateral desplegable en pantallas estrechas (móvil). */
+function setDrawer(open) {
+  const app = $('.app');
+  if (app) app.classList.toggle('drawer', !!open);
+}
+
+/** Botón «Atrás» de Android. Devuelve false si no hay nada que hacer (se minimiza la app). */
+function handleBack() {
+  if (modalOpen()) { closeModal(); return true; }
+  if ($('.app').classList.contains('drawer')) { setDrawer(false); return true; }
+  if (view.name === 'deck' && view.section) { go({ name: 'deck', id: view.id }); return true; }
+  if (view.name !== 'home') { go({ name: 'home' }); return true; }
+  return false;
+}
+
+function renderTopbar() {
+  $('#topbar').innerHTML = `<button class="icon-btn menu-btn" data-act="drawer" aria-label="Abrir menú">${ICON.menu}</button>
+    <div class="brand"><img class="logo" src="icon.svg" alt="">Memomancer</div>`;
+}
+
 function render() {
   const app = $('.app');
+  app.dataset.view = view.name;
   if (view.name === 'study') {
     app.style.gridTemplateColumns = '1fr';
     $('#sidebar').style.display = 'none';
@@ -359,6 +386,7 @@ function render() {
     app.style.gridTemplateColumns = '';
     $('#sidebar').style.display = '';
     renderSidebar();
+    renderTopbar();
   }
   const fn = { home: renderHome, deck: renderDeck, add: renderAdd, browse: renderBrowse, community: renderCommunity, stats: renderStats, settings: renderSettings, study: renderStudy }[view.name];
   fn();
@@ -432,7 +460,7 @@ function renderHome() {
       <div class="tile"><div class="label">Racha</div><div class="value">${streak()}</div><div class="hint">días seguidos estudiando</div></div>
       <div class="tile"><div class="label">Colección</div><div class="value">${db.cards.length}</div><div class="hint">${plural(db.decks.length, 'mazo', 'mazos')} · ${plural(db.decks.reduce((a, d) => a + d.sections.length, 0), 'sección', 'secciones')}</div></div>
     </div>
-    ${db.decks.length ? `<div class="panel"><table class="table"><thead><tr><th>Mazo / sección</th><th class="r c-new">Nuevas</th><th class="r c-learn">Aprendiendo</th><th class="r c-review">Repasar</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
+    ${db.decks.length ? `<div class="panel"><table class="table home-table"><thead><tr><th>Mazo / sección</th><th class="r c-new" data-short="Nuevas">Nuevas</th><th class="r c-learn" data-short="Apr.">Aprendiendo</th><th class="r c-review" data-short="Rep.">Repasar</th><th></th></tr></thead><tbody>${rows}</tbody></table></div>`
       : `<div class="panel empty"><h2>Crea tu primer mazo</h2><p>Los mazos agrupan tarjetas; dentro de cada mazo puedes organizarlas en secciones.<br>También puedes importar tus tarjetas desde un archivo de texto (<code>pregunta = respuesta</code>, una por línea).</p>
         <div class="row" style="justify-content:center"><button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn primary" data-act="new-deck">Nuevo mazo</button></div></div>`}
     <div class="section-head"><div><h2>Modos de estudio</h2><div class="small muted">Combinaciones guardadas de mazos, secciones y opciones. Empiézalas con un clic.</div></div></div>
@@ -806,7 +834,7 @@ function renderSettings() {
     <div class="panel pad"><h2 style="margin-bottom:4px">Datos</h2><p class="hint" style="margin:0 0 14px">Tus datos se guardan en este equipo. Cada día se crea una copia de seguridad automática (se conservan 14).</p>
       <div class="row"><button class="btn" data-act="export-json">Exportar copia (JSON)</button><button class="btn" data-act="import-json">Restaurar copia…</button>
         <button class="btn" data-act="import-csv">Importar archivo de texto…</button><button class="btn" data-act="export-csv">Exportar mazo a CSV…</button>
-        <button class="btn ghost" data-act="open-folder">Abrir carpeta de datos</button></div></div>
+        ${isAndroid ? '' : '<button class="btn ghost" data-act="open-folder">Abrir carpeta de datos</button>'}</div></div>
   </div>`;
   $$('#theme input').forEach((el) => { el.onchange = () => { set.theme = el.value; applyTheme(); persist(); }; });
   const steps = (v) => v.split(/[\s,]+/).map(Number).filter((n) => n > 0);
@@ -1057,7 +1085,9 @@ function updatePanelHtml() {
   const u = ui.update;
   const busy = ['checking', 'downloading', 'installing'].includes(u.status);
   let body = '';
-  if (u.status === 'idle') body = '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, se descarga e instala sola y Memomancer se vuelve a abrir.</p>';
+  if (u.status === 'idle') body = isAndroid
+    ? '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, podrás descargar el APK e instalarlo encima; tus tarjetas se conservan.</p>'
+    : '<p class="hint" style="margin:0">Comprueba si hay una versión nueva publicada en GitHub. Si la hay, se descarga e instala sola y Memomancer se vuelve a abrir.</p>';
   else if (u.status === 'checking') body = '<p class="upd-line"><span class="spinner"></span>Buscando actualizaciones…</p>';
   else if (u.status === 'uptodate') body = `<p class="upd-line ok">✓ Tienes la última versión (${esc(u.info.latest)}).</p>`;
   else if (u.status === 'available') {
@@ -1066,7 +1096,9 @@ function updatePanelHtml() {
       ${releaseNotesHtml(i.notes)}
       <div class="row" style="margin-top:12px">${i.canInstall
         ? `<button class="btn primary" data-act="install-update">Descargar e instalar (${mb(i.size)} MB)</button>`
-        : `<button class="btn primary" data-act="open-release">Abrir página de descarga</button><span class="hint">Esta copia no se instaló con el instalador (por ejemplo, la versión portable), así que no puede actualizarse sola.</span>`}</div></div>`;
+        : isAndroid
+          ? `<button class="btn primary" data-act="open-release">Descargar APK (${mb(i.size)} MB)</button><span class="hint">Cuando termine la descarga, ábrela para instalar la actualización (Android puede pedirte permiso para instalar apps desde el navegador). Tus tarjetas se conservan.</span>`
+          : `<button class="btn primary" data-act="open-release">Abrir página de descarga</button><span class="hint">Esta copia no se instaló con el instalador (por ejemplo, la versión portable), así que no puede actualizarse sola.</span>`}</div></div>`;
   } else if (u.status === 'downloading') {
     const pct = u.total ? Math.min(100, Math.round((u.received / u.total) * 100)) : 0;
     body = `<div class="upd-progress" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100"><i style="width:${pct}%"></i></div>
@@ -1885,6 +1917,7 @@ async function newSection(deckId) {
 
 const actions = {
   nav: (el) => go({ name: el.dataset.view }),
+  drawer: () => setDrawer(!$('.app').classList.contains('drawer')),
   'open-deck': (el) => go({ name: 'deck', id: el.dataset.id, section: el.dataset.section || null }),
   'toggle-deck': (el) => { const id = el.dataset.id; ui.collapsed.has(id) ? ui.collapsed.delete(id) : ui.collapsed.add(id); renderSidebar(); },
   'new-deck': newDeck,

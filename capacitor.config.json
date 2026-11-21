@@ -1,0 +1,9 @@
+{
+  "appId": "app.memomancer",
+  "appName": "Memomancer",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "captureInput": false
+  }
+}

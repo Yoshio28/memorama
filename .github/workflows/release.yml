@@ -1,7 +1,8 @@
 name: Publicar release
 
 # Cuando llega a main una versión nueva (campo "version" de package.json) que aún no tiene
-# release, se compila el instalador de Windows y se publica la release vX.Y.Z con su etiqueta.
+# release, se compila el instalador de Windows y se publica la release vX.Y.Z con su etiqueta;
+# después se compila el APK de Android y se añade a esa misma release.
 # También se puede lanzar a mano desde la pestaña Actions (vuelve a subir los archivos).
 on:
   push:
@@ -14,6 +15,9 @@ permissions:
 jobs:
   windows:
     runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+      skip: ${{ steps.ver.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
       - name: ¿Hay versión nueva?
@@ -56,3 +60,46 @@ jobs:
             gh release create "$TAG" dist/Memomancer-Setup-*.exe dist/Memomancer-Portable-*.zip dist/Memora-Setup-*.exe \
               --target "$GITHUB_SHA" --title "Memomancer ${TAG#v}" --notes-file .github/release-notes.md
           fi
+
+  android:
+    needs: windows
+    if: needs.windows.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+      - run: npm ci
+      - name: Preparar la app web para Android
+        run: npm run build:mobile
+      - name: Clave de firma
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          # Todas las versiones deben firmarse con la misma clave para poder instalarse encima.
+          if [ -z "$KEYSTORE_B64" ] || [ -z "$KEYSTORE_PASSWORD" ]; then
+            echo "::error::Faltan los secretos ANDROID_KEYSTORE_BASE64 y ANDROID_KEYSTORE_PASSWORD (Settings → Secrets and variables → Actions)."
+            exit 1
+          fi
+          echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+          echo "MEMOMANCER_KEYSTORE=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+      - name: Compilar APK
+        working-directory: android
+        env:
+          MEMOMANCER_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew assembleRelease --no-daemon --stacktrace
+      - name: Añadir el APK a la release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.windows.outputs.tag }}
+        run: |
+          mkdir -p dist
+          cp android/app/build/outputs/apk/release/app-release.apk "dist/Memomancer-${TAG#v}.apk"
+          gh release upload "$TAG" "dist/Memomancer-${TAG#v}.apk" --clobber
