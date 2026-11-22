@@ -44,6 +44,21 @@ Además añade dos cosas:
   gato = cat = Animales      ← la 3.ª columna (opcional) es la sección
   ```
 
+  **Secciones por títulos**: si el archivo tiene títulos numerados, las tarjetas que
+  hay entre `1. Nombre` y `2. Otro` van a la sección «Nombre» (se detecta solo):
+
+  ```
+  1. Animales
+  perro = dog
+  gato = cat
+  2. Colores
+  rojo = red
+  ```
+
+  Si los títulos empiezan de otra forma (p. ej. `Tema 1: Colores` o `# Colores`),
+  elige «Títulos que empiezan por…» y escribe ese texto. Si no eliges nada, se
+  importa como siempre.
+
   Puedes cambiar el separador (tabulador, `;`, `,`, `|`, `:` o uno propio) y ver
   la vista previa al momento. Las líneas sin separador aparecen en una lista donde
   puedes corregirlas (añadiendo el separador) o eliminarlas antes de importar. También sirve el formato «Notas en texto plano» que exportan otras

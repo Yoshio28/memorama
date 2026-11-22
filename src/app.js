@@ -1696,8 +1696,7 @@ function readHeaders(text) {
  * Convierte texto delimitado en filas de campos. `sep` fuerza el separador; si no se indica,
  * se usa la cabecera del archivo o se detecta (tabulador, «=», «;» o «,»).
  */
-function parseDelimited(text, sep) {
-  const headers = readHeaders(text);
+function parseDelimited(text, sep, headers = readHeaders(text)) {
   const body = text.replace(/^﻿/, '').split(/\r?\n/).filter((l) => !/^#\w+:/.test(l));
   if (!sep) sep = headers.sep;
   if (!sep) {
@@ -1739,11 +1738,73 @@ function defaultSeparator(name, text) {
   return first.includes('\t') ? '\t' : first.includes(';') ? ';' : ',';
 }
 
+/** «1. Nombre», «2) Nombre»… (sin separador en la línea) → { n, name }. */
+const NUM_TITLE = /^\s*(\d{1,3})\s*[.)]\s*(.*)$/;
+const cleanTitle = (t) => t.trim().replace(/^["'«“”]+|["'»“”]+$/g, '').replace(/\s*:$/, '').trim();
+
+/**
+ * Título de sección de una línea, o null si no lo es. `mode`: 'num' (1., 2., …) o 'custom'
+ * (la línea empieza por `marker`). Una línea que contiene el separador es una tarjeta.
+ */
+function sectionTitle(line, mode, marker, sep, count) {
+  if (/^#\w+:/.test(line)) return null;
+  if (mode === 'num') {
+    const m = line.match(NUM_TITLE);
+    if (!m || (sep && line.includes(sep))) return null;
+    return cleanTitle(m[2]) || `Sección ${m[1]}`;
+  }
+  if (mode === 'custom' && marker) {
+    const t = line.trimStart();
+    if (!t.toLowerCase().startsWith(marker.toLowerCase())) return null;
+    const rest = t.slice(marker.length);
+    if (sep && rest.includes(sep)) return null;
+    // «Tema 1: Colores» → «Colores» (el número solo ordena).
+    const name = cleanTitle(rest);
+    return cleanTitle(name.replace(/^\d{1,3}\s*[.):\-–]\s*/, '')) || name || `Sección ${count + 1}`;
+  }
+  return null;
+}
+
+/** ¿El archivo usa títulos numerados (1., 2., …) para separar secciones? */
+function detectNumbered(text, sep) {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/).filter((l) => l.trim() && !/^#\w+:/.test(l));
+  const titles = lines.filter((l) => sectionTitle(l, 'num', '', sep, 0) !== null);
+  return titles.length >= 2 || (titles.length === 1 && sectionTitle(lines[0], 'num', '', sep, 0) !== null);
+}
+
+/**
+ * Lee el archivo dividiéndolo por títulos de sección. Las tarjetas que hay entre «1. A» y
+ * «2. B» van a la sección A (salvo que la línea indique otra con «= sección»).
+ * Devuelve { rows, sections } con los nombres de sección en orden.
+ */
+function parseWithSections(text, sep, mode, marker) {
+  const headers = readHeaders(text);
+  if (mode === 'none' || (mode === 'custom' && !marker)) return { rows: parseDelimited(text, sep, headers), sections: [] };
+  const sections = [];
+  const rows = [];
+  let current = '', buf = [];
+  const flush = () => {
+    if (buf.some((l) => l.trim())) for (const r of parseDelimited(buf.join('\n'), sep, headers)) rows.push(current && r.length >= 2 && !r[2] ? [r[0], r[1], current, ...r.slice(3)] : r);
+    buf = [];
+  };
+  for (const line of text.replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const title = sectionTitle(line, mode, marker, sep, sections.length);
+    if (title === null) { buf.push(line); continue; }
+    flush();
+    current = title;
+    if (!sections.some((x) => x.toLowerCase() === title.toLowerCase())) sections.push(title);
+  }
+  flush();
+  return { rows, sections };
+}
+
 async function importCsv(targetDeckId) {
   const file = await api.openFile({ filters: [{ name: 'Archivos de texto', extensions: ['txt', 'csv', 'tsv'] }, { name: 'Todos los archivos', extensions: ['*'] }] });
   if (!file) return;
   let sep = defaultSeparator(file.name, file.content);
   let rows = [];        // filas parseadas; null = línea eliminada por el usuario
+  let sections = [];    // secciones encontradas por título, en orden
+  let detected = detectNumbered(file.content, sep);
   let fixIdx = [];      // filas que no tenían separador al leer el archivo
   const known = Object.prototype.hasOwnProperty.call(SEPARATORS, sep);
   const preselect = deckById(targetDeckId)?.id || deckById(ui.addDeck)?.id || '';
@@ -1754,7 +1815,8 @@ async function importCsv(targetDeckId) {
   const rowText = (r) => (r.length === 1 ? r[0] : r.join(` ${fixSep()} `));
 
   const m = openModal(`${modalHead('Importar tarjetas')}<form><div class="modal-body">
-    <p class="hint" style="margin-top:0"><b>${esc(file.name)}</b>. Una tarjeta por línea: <code>anverso = reverso</code>, y opcionalmente <code>= sección</code> al final (la sección se crea si no existe).</p>
+    <p class="hint" style="margin-top:0"><b>${esc(file.name)}</b>. Una tarjeta por línea: <code>anverso = reverso</code>, y opcionalmente <code>= sección</code> al final (la sección se crea si no existe).
+      Si el archivo tiene títulos como <code>1. Verbos</code>, <code>2. Vocabulario</code>…, las tarjetas que hay debajo de cada título van a esa sección.</p>
     <div class="grid-2">
       <div class="field"><label for="imp-sep">Separador</label><div class="row" style="flex-wrap:nowrap">
         <select class="input" id="imp-sep">${Object.entries(SEPARATORS).map(([v, l]) => `<option value="${esc(v)}" ${v === sep ? 'selected' : ''}>${l}</option>`).join('')}<option value="__custom" ${known ? '' : 'selected'}>Otro…</option></select>
@@ -1762,6 +1824,13 @@ async function importCsv(targetDeckId) {
       <div class="field"><label for="imp-deck">Mazo de destino</label><select class="input" id="imp-deck">${db.decks.map((d) => `<option value="${d.id}" ${d.id === preselect ? 'selected' : ''}>${esc(d.name)}</option>`).join('')}<option value="__new" ${preselect ? '' : 'selected'}>+ Nuevo mazo…</option></select></div>
     </div>
     <div class="field" id="imp-newname-f"><label for="imp-newname">Nombre del nuevo mazo</label><input class="input" id="imp-newname" value="${esc(file.name.replace(/\.[^.]+$/, ''))}"></div>
+    <div class="field" id="imp-sec-f"><label for="imp-secmode">Secciones</label><div class="row" style="flex-wrap:nowrap">
+      <select class="input" id="imp-secmode">
+        <option value="none" ${detected ? '' : 'selected'}>Sin títulos de sección</option>
+        <option value="num" ${detected ? 'selected' : ''}>Títulos numerados: 1., 2., 3.…</option>
+        <option value="custom">Títulos que empiezan por…</option></select>
+      <input class="input" id="imp-marker" style="width:160px;display:none" placeholder="p. ej. Tema o #" aria-label="Texto con el que empieza cada título de sección" spellcheck="false"></div>
+      <div class="small muted" id="imp-sec-hint" style="margin-top:6px"></div></div>
     <label class="check"><input type="checkbox" id="imp-header"> La primera fila es un encabezado</label>
     <label class="check"><input type="checkbox" id="imp-dupes" checked> Omitir tarjetas cuyo anverso ya exista en el mazo</label>
     <div id="imp-fix"></div>
@@ -1775,6 +1844,14 @@ async function importCsv(targetDeckId) {
     const ok = data.filter(valid);
     const pending = data.length - ok.length;
     $('#imp-summary').textContent = `Vista previa · ${plural(ok.length, 'tarjeta lista para importar', 'tarjetas listas para importar')}`;
+    const mode = $('#imp-secmode').value;
+    const marker = $('#imp-marker').value.trim();
+    const counts = sections.map((name) => `${name} (${ok.filter((r) => (r[2] || '').toLowerCase() === name.toLowerCase()).length})`);
+    $('#imp-sec-hint').innerHTML = sections.length
+      ? `${plural(sections.length, 'sección encontrada', 'secciones encontradas')}: ${esc(counts.slice(0, 8).join(' · '))}${counts.length > 8 ? ` · y ${counts.length - 8} más` : ''}`
+      : mode === 'num' ? 'No hay líneas que empiecen por «1.», «2.»… sin separador. Elige otro texto o «Sin títulos de sección».'
+      : mode === 'custom' ? (marker ? `Ninguna línea empieza por «${esc(marker)}».` : 'Escribe el texto con el que empieza cada título (p. ej. <code>Tema</code> para «Tema 1: Verbos»).')
+      : detected ? '' : 'No se encontraron secciones numeradas. Si tu archivo separa las secciones con títulos, elige con qué texto empiezan; si no, cada línea puede indicar su sección con <code>= sección</code>.';
     $('#imp-preview').innerHTML = ok.slice(0, 6).map((r) => `<tr><td class="cell-clip">${esc(r[0])}</td><td class="cell-clip">${esc(r[1])}</td><td>${esc(r[2] || '—')}</td></tr>`).join('')
       + (ok.length > 6 ? `<tr><td colspan="3" class="small muted">… y ${ok.length - 6} más</td></tr>` : '')
       || '<tr><td colspan="3" class="muted">Ninguna línea tiene anverso y reverso todavía.</td></tr>';
@@ -1832,14 +1909,25 @@ async function importCsv(targetDeckId) {
     const v = $('#imp-sep').value;
     $('#imp-sep-custom').style.display = v === '__custom' ? '' : 'none';
     sep = v === '__custom' ? $('#imp-sep-custom').value : v;
-    rows = sep ? parseDelimited(file.content, sep) : [];
+    const mode = $('#imp-secmode').value;
+    $('#imp-marker').style.display = mode === 'custom' ? '' : 'none';
+    ({ rows, sections } = sep ? parseWithSections(file.content, sep, mode, $('#imp-marker').value.trim()) : { rows: [], sections: [] });
     fixIdx = rows.map((r, i) => (valid(r) ? -1 : i)).filter((i) => i >= 0);
     renderFix();
     refresh();
   };
 
-  $('#imp-sep').onchange = reparse;
+  $('#imp-sep').onchange = () => {
+    // Si cambia el separador, se vuelve a comprobar si hay títulos numerados.
+    const v = $('#imp-sep').value;
+    const now = detectNumbered(file.content, v === '__custom' ? $('#imp-sep-custom').value : v);
+    if (now !== detected && $('#imp-secmode').value !== 'custom') $('#imp-secmode').value = now ? 'num' : 'none';
+    detected = now;
+    reparse();
+  };
   $('#imp-sep-custom').oninput = reparse;
+  $('#imp-secmode').onchange = () => { reparse(); if ($('#imp-secmode').value === 'custom') $('#imp-marker').focus(); };
+  $('#imp-marker').oninput = reparse;
   $('#imp-header').onchange = () => { renderFix(); refresh(); };
   $('#imp-deck').onchange = refresh;
   reparse();
@@ -1853,6 +1941,11 @@ async function importCsv(targetDeckId) {
     else deck = deckById($('#imp-deck').value);
     const existing = new Set(db.cards.filter((c) => c.deckId === deck.id).map((c) => c.front.trim().toLowerCase()));
     const skipDupes = $('#imp-dupes').checked;
+    // Las secciones de los títulos se crean en el orden del archivo.
+    const usedSecs = new Set(data.map((r) => (r[2] || '').toLowerCase()));
+    for (const name of sections) {
+      if (usedSecs.has(name.toLowerCase()) && !deck.sections.some((s) => s.name.toLowerCase() === name.toLowerCase())) makeSection(deck, name);
+    }
     let added = 0, dupes = 0;
     for (const [front, back, secName] of data) {
       if (skipDupes && existing.has(front.toLowerCase())) { dupes++; continue; }
